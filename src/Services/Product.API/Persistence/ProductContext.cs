@@ -2,6 +2,7 @@ using System.Text.Json;
 using Contracts.Domains.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using MySql.EntityFrameworkCore.Extensions;
 using Product.API.Entities;
 
 namespace Product.API.Persistence;
@@ -25,7 +26,7 @@ public class ProductContext(DbContextOptions<ProductContext> options) : DbContex
         var categories = modelBuilder.Entity<Categories>();
         categories.ToTable("categories");
         categories.Property(x => x.Name).HasMaxLength(120);
-        categories.Property(x => x.Slug).HasMaxLength(120).UseCollation(BinaryCollation);
+        ConfigureBinaryKey(categories.Property(x => x.Slug), 120);
         categories.HasIndex(x => x.Slug).IsUnique();
         categories.HasIndex(x => new { x.ParentId, x.Status, x.SortOrder, x.Id });
         categories.HasOne<Categories>().WithMany().HasForeignKey(x => x.ParentId).OnDelete(DeleteBehavior.Restrict);
@@ -33,9 +34,10 @@ public class ProductContext(DbContextOptions<ProductContext> options) : DbContex
         ConfigureAuditDates(categories);
 
         var products = modelBuilder.Entity<Products>();
-        products.ToTable("products");
+        products.ToTable("products", table =>
+            table.HasCheckConstraint("ck_products_description_length", "CHAR_LENGTH(description) <= 10000"));
         products.Property(x => x.Name).HasMaxLength(160);
-        products.Property(x => x.Slug).HasMaxLength(160).UseCollation(BinaryCollation);
+        ConfigureBinaryKey(products.Property(x => x.Slug), 160);
         products.Property(x => x.Description).HasMaxLength(10000).HasColumnType("text");
         products.HasIndex(x => x.Slug).IsUnique();
         products.HasIndex(x => new { x.CategoryId, x.Status, x.PublishedAt, x.Id });
@@ -51,11 +53,11 @@ public class ProductContext(DbContextOptions<ProductContext> options) : DbContex
             table.HasCheckConstraint("ck_product_variants_dimensions",
                 "weight_g > 0 AND length_mm > 0 AND width_mm > 0 AND height_mm > 0");
         });
-        variants.Property(x => x.Sku).HasMaxLength(64).UseCollation(BinaryCollation)
+        ConfigureBinaryKey(variants.Property(x => x.Sku), 64)
             .HasConversion(value => value.Trim().ToUpperInvariant(), value => value);
-        variants.Property(x => x.ColorCode).HasMaxLength(48).UseCollation(BinaryCollation)
+        ConfigureBinaryKey(variants.Property(x => x.ColorCode), 48)
             .HasConversion(value => value.Trim().ToUpperInvariant(), value => value);
-        variants.Property(x => x.SizeCode).HasMaxLength(32).UseCollation(BinaryCollation)
+        ConfigureBinaryKey(variants.Property(x => x.SizeCode), 32)
             .HasConversion(value => value.Trim().ToUpperInvariant(), value => value);
         variants.Property(x => x.ColorLabel).HasMaxLength(80);
         variants.Property(x => x.SizeLabel).HasMaxLength(80);
@@ -66,7 +68,7 @@ public class ProductContext(DbContextOptions<ProductContext> options) : DbContex
 
         var images = modelBuilder.Entity<ProductImages>();
         images.ToTable("product_images");
-        images.Property(x => x.AssetKey).HasMaxLength(255).UseCollation(BinaryCollation);
+        ConfigureBinaryKey(images.Property(x => x.AssetKey), 255);
         images.Property(x => x.AltText).HasMaxLength(160);
         images.HasIndex(x => new { x.ProductId, x.Position }).IsUnique();
         images.HasIndex(x => x.AssetKey).IsUnique();
@@ -74,8 +76,8 @@ public class ProductContext(DbContextOptions<ProductContext> options) : DbContex
 
         var uploads = modelBuilder.Entity<ProductImageUploads>();
         uploads.ToTable("product_image_uploads");
-        uploads.Property(x => x.StagingKey).HasMaxLength(255).UseCollation(BinaryCollation);
-        uploads.Property(x => x.AssetKey).HasMaxLength(255).UseCollation(BinaryCollation);
+        ConfigureBinaryKey(uploads.Property(x => x.StagingKey), 255);
+        ConfigureBinaryKey(uploads.Property(x => x.AssetKey), 255);
         uploads.Property(x => x.ExpectedContentType).HasMaxLength(100);
         uploads.HasIndex(x => x.StagingKey).IsUnique();
         uploads.HasIndex(x => new { x.Status, x.ExpiresAt });
@@ -99,6 +101,9 @@ public class ProductContext(DbContextOptions<ProductContext> options) : DbContex
         {
             foreach (var property in entity.GetProperties())
             {
+                if ((Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType) == typeof(DateTimeOffset))
+                    property.SetColumnType("datetime(6)");
+
                 if (property.Name is not (nameof(IDateTracking.CreatedDate) or nameof(IDateTracking.LastModifiedDate)))
                     property.SetColumnName(JsonNamingPolicy.SnakeCaseLower.ConvertName(property.Name));
             }
@@ -115,6 +120,14 @@ public class ProductContext(DbContextOptions<ProductContext> options) : DbContex
     {
         UpdateAuditDates();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private static PropertyBuilder<T> ConfigureBinaryKey<T>(PropertyBuilder<T> property, int maxLength)
+    {
+        property.HasMaxLength(maxLength);
+        property.ForMySQLHasCharset("utf8mb4");
+        property.ForMySQLHasCollation(BinaryCollation);
+        return property;
     }
 
     private static void ConfigureAuditDates<TEntity>(EntityTypeBuilder<TEntity> entity)

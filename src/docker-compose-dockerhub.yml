@@ -1,0 +1,112 @@
+# Use with docker-compose.override.yml for ports, environment and dependencies.
+services:
+  # Databases
+  orderdb:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+
+  identitydb:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+
+  productdb:
+    image: mysql:8.0.45
+
+  customerdb:
+    image: postgres:alpine3.16
+
+  basketdb:
+    image: redis:alpine
+
+  inventorydb:
+    image: mongo:7.0.43
+
+  hangfiredb:
+    image: mongo:7.0.43
+
+  # Infrastructure
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+
+  pgadmin:
+    image: dpage/pgadmin4
+
+  portainer:
+    image: portainer/portainer-ce
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.7
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.7
+
+  # Application images published to Docker Hub
+  product.api:
+    image: kietphamdev/tedu-microservice-product:latest
+    pull_policy: always
+
+  customer.api:
+    image: kietphamdev/tedu-microservice-customer:latest
+    pull_policy: always
+
+  basket.api:
+    image: kietphamdev/tedu-microservice-basket:latest
+    pull_policy: always
+
+  ordering.api:
+    image: kietphamdev/tedu-microservice-ordering:latest
+    pull_policy: always
+
+  inventory.product.api:
+    image: kietphamdev/tedu-microservice-inventory-product:latest
+    pull_policy: always
+
+  inventory.grpc:
+    image: kietphamdev/tedu-microservice-inventory-grpc:latest
+    pull_policy: always
+
+  apigw.ocelot:
+    image: kietphamdev/tedu-microservice-apigw-ocelot:latest
+    pull_policy: always
+
+  hangfire.api:
+    image: kietphamdev/tedu-microservice-hangfire:latest
+    pull_policy: always
+
+  saga.api:
+    image: kietphamdev/tedu-microservice-saga:latest
+    pull_policy: always
+
+  identity.api:
+    image: kietphamdev/tedu-microservice-idp:dotnet10
+    pull_policy: always
+
+  webstatus:
+    image: kietphamdev/tedu-microservice-web-health:latest
+    pull_policy: always
+
+networks:
+  default:
+    name: ecommerce_microservices
+
+volumes:
+  ecommerce_sqlserver_data:
+    name: ecommerce_sqlserver_data
+  ecommerce_identity_sqlserver_data:
+    name: ecommerce_identity_sqlserver_data
+  ecommerce_mysql_data:
+    name: ecommerce_mysql_data
+  ecommerce_postgres_data:
+    name: ecommerce_postgres_data
+  ecommerce_portainer_data:
+    name: ecommerce_portainer_data
+  ecommerce_elasticsearch_data:
+    name: ecommerce_elasticsearch_data
+  ecommerce_jaeger_data:
+    name: ecommerce_jaeger_data
+  ecommerce_mongo_data:
+    name: ecommerce_mongo_data
+  ecommerce_hangfire_mongo_data:
+    name: ecommerce_hangfire_mongo_data
+  ecommerce_pgadmin_data:
+    name: ecommerce_pgadmin_data
+  ecommerce_rabbitmq_data:
+    name: ecommerce_rabbitmq_data

@@ -1,6 +1,0 @@
-services:
-  webhealthstatus:
-    image: ${DOCKER_REGISTRY-}webhealthstatus
-    build:
-      context: src/WebApps/WebHealthStatus
-      dockerfile: Dockerfile
