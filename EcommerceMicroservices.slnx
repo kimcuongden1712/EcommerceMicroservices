@@ -24,7 +24,4 @@
   <Folder Name="/src/WebApps/">
     <Project Path="src/WebApps/WebHealthStatus/WebHealthStatus.csproj" />
   </Folder>
-  <Project Path="docker-compose.dcproj">
-    <Build />
-  </Project>
 </Solution>

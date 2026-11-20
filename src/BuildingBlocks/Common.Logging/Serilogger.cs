@@ -21,11 +21,10 @@ public static class Serilogger
                 .WriteTo.Console(outputTemplate:
                     "[{Timestamp:HH:mm:ss} {Level}] {SourceContext}{NewLine}{Message:lj}{NewLine}{Exception}{NewLine}");
 
-            if (!string.IsNullOrWhiteSpace(elasticUri))
-            {
+            if (!string.IsNullOrWhiteSpace(elasticUri)) {
                 configuration.WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(elasticUri))
                 {
-                    IndexFormat = $"tedulogs-{applicationName}-{environmentName}-{DateTime.UtcNow:yyyy-MM}",
+                    IndexFormat = $"logs-{applicationName}-{environmentName}-{DateTime.UtcNow:yyyy-MM}",
                     AutoRegisterTemplate = true,
                     NumberOfReplicas = 1,
                     NumberOfShards = 2,

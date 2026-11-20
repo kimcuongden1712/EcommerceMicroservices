@@ -1,34 +1,13 @@
-﻿using Contracts.Domains.Interfaces;
+using Contracts.Domains;
 
-namespace Product.API.Entities
+namespace Product.API.Entities;
+
+public class CatalogOutbox : EntityBase<long>
 {
-    public class CatalogOutbox : EntityAuditBase<long>
-    {
-        public string Topic
-        {
-            get; set;
-        }
-
-        public string PayloadJson
-        {
-            get; set;
-        }
-        public string Attempts
-        {
-            get; set;
-        }
-        public DateTimeOffset? NextAttemptAt
-        {
-            get; set;
-        }
-        public DateTimeOffset? PublishedAt
-        {
-            get; set;
-        }
-
-        public DateTimeOffset? OccurredAt
-        {
-            get; set;
-        }
-    }
+    public required string Topic { get; set; }
+    public required string PayloadJson { get; set; }
+    public int Attempts { get; set; }
+    public DateTimeOffset NextAttemptAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? PublishedAt { get; set; }
+    public DateTimeOffset OccurredAt { get; set; } = DateTimeOffset.UtcNow;
 }

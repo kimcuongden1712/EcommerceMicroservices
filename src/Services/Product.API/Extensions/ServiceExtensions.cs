@@ -1,4 +1,3 @@
-using System.Text;
 using Contracts.Domains.Interfaces;
 using Infrastructure.Common;
 using Infrastructure.Extensions;
@@ -12,12 +11,13 @@ using Product.API.Persistence;
 using Product.API.Repositories;
 using Product.API.Repositories.Interfaces;
 using Shared.Configurations;
+using System.Text;
 
 namespace Product.API.Extensions;
 
 public static class ServiceExtensions
 {
-    internal static IServiceCollection AddConfigurationSettings(this IServiceCollection services,
+    internal static IServiceCollection AddConfigurationSettings (this IServiceCollection services,
         IConfiguration configuration)
     {
         var jwtSettings = configuration.GetSection(nameof(JwtSettings))
@@ -29,7 +29,7 @@ public static class ServiceExtensions
             .Get<DatabaseSettings>();
         if (databaseSettings is null || string.IsNullOrEmpty(databaseSettings.ConnectionString))
             throw new ArgumentNullException("Connection string is not configured.");
-        
+
         services.AddSingleton(databaseSettings);
 
         var apiConfiguration = configuration.GetSection(nameof(ApiConfiguration))
@@ -40,7 +40,7 @@ public static class ServiceExtensions
         return services;
     }
 
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddInfrastructure (this IServiceCollection services, IConfiguration configuration)
     {
         services.AddControllers();
         services.Configure<RouteOptions>(options => options.LowercaseUrls = true);
@@ -49,7 +49,6 @@ public static class ServiceExtensions
         services.ConfigureSwagger();
         services.ConfigureProductDbContext(configuration);
         services.AddInfrastructureServices();
-        services.AddAutoMapper(cfg => cfg.AddProfile(new MappingProfile()));
         // services.AddJwtAuthentication();
         services.ConfigureAuthenticationHandler();
         services.ConfigureAuthorization();
@@ -57,7 +56,7 @@ public static class ServiceExtensions
         return services;
     }
 
-    internal static IServiceCollection AddJwtAuthentication(this IServiceCollection services)
+    internal static IServiceCollection AddJwtAuthentication (this IServiceCollection services)
     {
         var settings = services.GetOptions<JwtSettings>(nameof(JwtSettings));
         if (settings == null || string.IsNullOrEmpty(settings.Key))
@@ -89,13 +88,13 @@ public static class ServiceExtensions
         return services;
     }
 
-    private static IServiceCollection ConfigureProductDbContext(this IServiceCollection services,
+    private static IServiceCollection ConfigureProductDbContext (this IServiceCollection services,
         IConfiguration configuration)
     {
         var databaseSettings = configuration.GetSection(nameof(DatabaseSettings)).Get<DatabaseSettings>();
         if (databaseSettings == null || string.IsNullOrEmpty(databaseSettings.ConnectionString))
             throw new ArgumentNullException($"{nameof(databaseSettings)} is not configured properly");
-        
+
         services.AddDbContext<ProductContext>(options => options.UseMySQL(databaseSettings.ConnectionString, mysqlOptions =>
             {
                 mysqlOptions.MigrationsAssembly("Product.API");
@@ -105,7 +104,7 @@ public static class ServiceExtensions
         return services;
     }
 
-    private static IServiceCollection AddInfrastructureServices(this IServiceCollection services)
+    private static IServiceCollection AddInfrastructureServices (this IServiceCollection services)
     {
         return services.AddScoped(typeof(IRepositoryBase<,,>), typeof(RepositoryBase<,,>))
                 .AddScoped(typeof(IUnitOfWork<>), typeof(UnitOfWork<>))
@@ -113,7 +112,7 @@ public static class ServiceExtensions
             ;
     }
 
-    private static void ConfigureHealthChecks(this IServiceCollection services)
+    private static void ConfigureHealthChecks (this IServiceCollection services)
     {
         var databaseSettings = services.GetOptions<DatabaseSettings>(nameof(DatabaseSettings));
         services.AddHealthChecks().AddMySql(
@@ -124,11 +123,12 @@ public static class ServiceExtensions
         );
     }
 
-    public static void ConfigureSwagger(this IServiceCollection services)
+    public static void ConfigureSwagger (this IServiceCollection services)
     {
         var configuration = services.GetOptions<ApiConfiguration>("ApiConfiguration");
         if (configuration == null || string.IsNullOrEmpty(configuration.IssuerUri) ||
-            string.IsNullOrEmpty(configuration.ApiName)) throw new Exception("ApiConfiguration is not configured!");
+            string.IsNullOrEmpty(configuration.ApiName))
+            throw new Exception("ApiConfiguration is not configured!");
 
         services.AddSwaggerGen(c =>
         {
@@ -149,8 +149,8 @@ public static class ServiceExtensions
                         AuthorizationUrl = new Uri($"{configuration.IdentityServerBaseUrl}/connect/authorize"),
                         Scopes = new Dictionary<string, string>
                         {
-                            { "tedu_microservices_api.read", "Tedu Microservices API Read Scope" },
-                            { "tedu_microservices_api.write", "Tedu Microservices API Write Scope" }
+                            { "microservices_api.read", "Microservices API Read Scope" },
+                            { "microservices_api.write", "Microservices API Write Scope" }
                         }
                     }
                 }
@@ -161,8 +161,8 @@ public static class ServiceExtensions
                     new OpenApiSecuritySchemeReference("Bearer", document),
                     new List<string>
                     {
-                        "tedu_microservices_api.read",
-                        "tedu_microservices_api.write"
+                        "microservices_api.read",
+                        "microservices_api.write"
                     }
                 }
             });

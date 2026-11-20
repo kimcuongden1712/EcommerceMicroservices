@@ -1,66 +1,19 @@
-﻿using Contracts.Domains.Interfaces;
+using Contracts.Domains;
 
-namespace Product.API.Entities
+namespace Product.API.Entities;
+
+public class ProductVariants : EntityBase<long>
 {
-    public class ProductVariants : EntityAuditBase<long>
-    {
-        public long ProductId
-        {
-            get; set;
-        }
-
-        public string Sku
-        {
-            get; set;
-        }
-        public string ColorCode
-        {
-            get; set;
-        }
-        public string ColorLabel
-        {
-            get; set;
-        }
-        public string SizeCode
-        {
-            get; set;
-        }
-        public string SizeLabel
-        {
-            get; set;
-        }
-        public decimal PriceMinor
-        {
-            get; set;
-        }
-        public int status
-        {
-            get; set;
-        }
-
-        public int WeightG
-        {
-            get; set;
-        }
-        public int LengthMm
-        {
-            get; set;
-        }
-        public int WidthMm
-        {
-            get; set;
-        }
-        public int HeightMm
-        {
-            get; set;
-        }
-        public DateTimeOffset? PublishedAt
-        {
-            get; set;
-        }
-        public string Version
-        {
-            get; set;
-        }
-    }
+    public long ProductId { get; set; }
+    public required string Sku { get; set; }
+    public required string ColorCode { get; set; }
+    public required string ColorLabel { get; set; }
+    public required string SizeCode { get; set; }
+    public required string SizeLabel { get; set; }
+    public int? PriceMinor { get; set; }
+    public int Status { get; set; }
+    public int? WeightG { get; set; }
+    public int? LengthMm { get; set; }
+    public int? WidthMm { get; set; }
+    public int? HeightMm { get; set; }
 }

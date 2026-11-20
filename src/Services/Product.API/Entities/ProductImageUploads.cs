@@ -1,33 +1,15 @@
-﻿using Contracts.Domains.Interfaces;
+using Contracts.Domains;
 
-namespace Product.API.Entities
+namespace Product.API.Entities;
+
+public class ProductImageUploads : EntityBase<long>
 {
-    public class ProductImageUploads : EntityAuditBase<long>
-    {
-        public long ProductId
-        {
-            get; set;
-        }
-
-        public string StagingKey
-        {
-            get; set;
-        }
-        public string? AssetKey
-        {
-            get; set;
-        }
-        public string ExpectedContentType
-        {
-            get; set;
-        }
-        public int Status
-        {
-            get; set;
-        }
-        public DateTimeOffset? ExpriesAt
-        {
-            get; set;
-        }
-    }
+    public long ProductId { get; set; }
+    public required string StagingKey { get; set; }
+    public string? AssetKey { get; set; }
+    public required string ExpectedContentType { get; set; }
+    public long ExpectedSize { get; set; }
+    public int Status { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

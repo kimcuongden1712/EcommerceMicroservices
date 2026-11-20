@@ -1,4 +1,4 @@
-﻿using Common.Logging;
+using Common.Logging;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 namespace Product.API.Extensions
@@ -17,7 +17,7 @@ namespace Product.API.Extensions
         }
 
         public static IHost MigrateDatabase<TContext> (this IHost host, Action<TContext, IServiceProvider> seeder)
-            where TContext : DbContext
+        where TContext : DbContext
         {
             using (var scope = host.Services.CreateScope()) {
                 var services = scope.ServiceProvider;

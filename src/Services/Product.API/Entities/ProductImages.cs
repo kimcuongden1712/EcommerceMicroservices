@@ -1,25 +1,11 @@
-﻿using Contracts.Domains.Interfaces;
+using Contracts.Domains;
 
-namespace Product.API.Entities
+namespace Product.API.Entities;
+
+public class ProductImages : EntityBase<long>
 {
-    public class ProductImages : EntityAuditBase<long>
-    {
-        public long ProductId
-        {
-            get; set;
-        }
-
-        public string AssetKey
-        {
-            get; set;
-        }
-        public string AltText
-        {
-            get; set;
-        }
-        public string Position
-        {
-            get; set;
-        }
-    }
+    public long ProductId { get; set; }
+    public required string AssetKey { get; set; }
+    public required string AltText { get; set; }
+    public int Position { get; set; }
 }

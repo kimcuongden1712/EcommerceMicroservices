@@ -6,14 +6,14 @@ using Product.API.Persistence;
 
 namespace Product.API.Repositories.Interfaces
 {
-    public interface IProductRepository : IRepositoryBase<CatalogProduct, long, ProductContext>
+    public interface IProductRepository : IRepositoryBase<Products, long, ProductContext>
     {
-        Task<PagedList<CatalogProduct>> GetProductsAsync (ProductParameters parameters, bool trackChanges);
-        Task<IEnumerable<CatalogProduct>> GetProductsAsync ();
-        Task<CatalogProduct?> GetProductAsync (long id);
-        Task<CatalogProduct?> GetProductByNoAsync (string productNo);
-        Task CreateProductAsync (CatalogProduct product);
-        Task UpdateProductAsync (CatalogProduct product);
+        Task<PagedList<Products>> GetProductsAsync (ProductParameters parameters, bool trackChanges);
+        Task<IEnumerable<Products>> GetProductsAsync ();
+        Task<Products?> GetProductAsync (long id);
+        Task<Products?> GetProductByNoAsync (string productNo);
+        Task CreateProductAsync (Products product);
+        Task UpdateProductAsync (Products product);
         Task DeleteProductAsync (long id);
     }
 }

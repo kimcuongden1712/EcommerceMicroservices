@@ -1,6 +1,4 @@
-using System.Security.Authentication;
 using Hangfire;
-using Hangfire.Console;
 using Hangfire.Console.Extensions;
 using Hangfire.Mongo;
 using Hangfire.Mongo.Migration.Strategies;
@@ -11,12 +9,13 @@ using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 using Newtonsoft.Json;
 using Shared.Configurations;
+using System.Security.Authentication;
 
 namespace Infrastructure.ScheduledJobs;
 
 public static class HangfireExtensions
 {
-    public static IServiceCollection AddTeduHangfireService(this IServiceCollection services)
+    public static IServiceCollection AddHangfireService (this IServiceCollection services)
     {
         var settings = services.GetOptions<HangFireSettings>("HangFireSettings");
         if (settings == null || settings.Storage == null ||
@@ -33,14 +32,13 @@ public static class HangfireExtensions
         return services;
     }
 
-    private static IServiceCollection ConfigureHangfireServices(this IServiceCollection services,
+    private static IServiceCollection ConfigureHangfireServices (this IServiceCollection services,
         HangFireSettings settings)
     {
         if (string.IsNullOrEmpty(settings.Storage.DBProvider))
             throw new Exception("HangFire DBProvider is not configured.");
 
-        switch (settings.Storage.DBProvider.ToLower())
-        {
+        switch (settings.Storage.DBProvider.ToLower()) {
             case "mongodb":
                 var mongoUrlBuilder = new MongoUrlBuilder(settings.Storage.ConnectionString);
                 mongoUrlBuilder.DatabaseName = settings.Storage.DatabaseName;
