@@ -1,0 +1,30 @@
+<Solution>
+  <Folder Name="/document/" />
+  <Folder Name="/resources/">
+    <File Path="resources/BRD_Ecommerce.pdf" />
+    <File Path="resources/Tedu-Microservices-Solution_Architect.jpg" />
+  </Folder>
+  <Folder Name="/src/" />
+  <Folder Name="/src/ApiGateways/" />
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/Common.Logging/Common.Logging.csproj" />
+    <Project Path="src/BuildingBlocks/Contracts/Contracts.csproj" />
+    <Project Path="src/BuildingBlocks/Infrastructure/Infrastructure.csproj" />
+    <Project Path="src/BuildingBlocks/Shared/Shared.csproj" />
+  </Folder>
+  <Folder Name="/src/Saga.Orchestrator/" />
+  <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/Basket/" />
+  <Folder Name="/src/Services/Customer/" />
+  <Folder Name="/src/Services/Inventory/" />
+  <Folder Name="/src/Services/Ordering/" />
+  <Folder Name="/src/Services/Product/">
+    <Project Path="src/Services/Product.API/Product.API.csproj" />
+  </Folder>
+  <Folder Name="/src/WebApps/">
+    <Project Path="src/WebApps/WebHealthStatus/WebHealthStatus.csproj" />
+  </Folder>
+  <Project Path="docker-compose.dcproj">
+    <Build />
+  </Project>
+</Solution>
