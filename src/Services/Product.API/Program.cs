@@ -14,12 +14,12 @@ try {
 
     var app = builder.Build();
     app.UseInfrastructure();
-    app.MigrateDatabase<ProductContext>((context, _) =>
+    await app.MigrateDatabaseAsync<ProductContext>(async (context, _, _) =>
     {
         if (builder.Environment.IsDevelopment())
-            ProductContextSeed.SeedProductAsync(context, Log.Logger).GetAwaiter().GetResult();
-    })
-        .Run();
+            await ProductContextSeed.SeedProductAsync(context, Log.Logger);
+    });
+    await app.RunAsync();
 }
 catch (Exception ex) {
     var type = ex.GetType().Name;
@@ -28,6 +28,7 @@ catch (Exception ex) {
         throw;
 
     Log.Fatal(ex, $"Unhandled exception: {ex.Message}");
+    throw;
 }
 finally {
     Log.Information($"Shutdown {builder.Environment.ApplicationName} complete");

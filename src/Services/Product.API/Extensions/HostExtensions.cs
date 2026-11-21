@@ -16,38 +16,29 @@ namespace Product.API.Extensions
             }).UseSerilog(Serilogger.Configure);
         }
 
-        public static IHost MigrateDatabase<TContext> (this IHost host, Action<TContext, IServiceProvider> seeder)
-        where TContext : DbContext
+        public static async Task<IHost> MigrateDatabaseAsync<TContext> (
+            this IHost host,
+            Func<TContext, IServiceProvider, CancellationToken, Task> seeder,
+            CancellationToken cancellationToken = default)
+            where TContext : DbContext
         {
-            using (var scope = host.Services.CreateScope()) {
-                var services = scope.ServiceProvider;
-                var logger = services.GetRequiredService<ILogger<TContext>>();
-                var context = services.GetService<TContext>();
+            await using var scope = host.Services.CreateAsyncScope();
+            var services = scope.ServiceProvider;
+            var logger = services.GetRequiredService<ILogger<TContext>>();
+            var context = services.GetRequiredService<TContext>();
 
-                try {
-                    logger.LogInformation("Migrating mysql database.");
-                    ExecuteMigrations(context);
-                    logger.LogInformation("Migrated mysql database.");
-                    InvokeSeeder(seeder, context, services);
-                }
-                catch (Exception ex) {
-                    logger.LogError(ex, "An error occurred while migrating the mysql database");
-                }
+            try {
+                logger.LogInformation("Migrating MySQL database.");
+                await context.Database.MigrateAsync(cancellationToken);
+                logger.LogInformation("Migrated MySQL database.");
+                await seeder(context, services, cancellationToken);
+            }
+            catch (Exception ex) {
+                logger.LogCritical(ex, "Database migration or seeding failed.");
+                throw;
             }
 
             return host;
-        }
-
-        private static void ExecuteMigrations<TContext> (TContext context)
-            where TContext : DbContext
-        {
-            context.Database.Migrate();
-        }
-
-        private static void InvokeSeeder<TContext> (Action<TContext, IServiceProvider> seeder, TContext context,
-            IServiceProvider services) where TContext : DbContext
-        {
-            seeder(context, services);
         }
     }
 }

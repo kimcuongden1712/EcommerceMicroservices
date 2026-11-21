@@ -115,12 +115,14 @@ public static class ServiceExtensions
     private static void ConfigureHealthChecks (this IServiceCollection services)
     {
         var databaseSettings = services.GetOptions<DatabaseSettings>(nameof(DatabaseSettings));
-        services.AddHealthChecks().AddMySql(
+        services.AddHealthChecks()
+            .AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "live" })
+            .AddMySql(
             healthQuery: "SELECT 1;",
             connectionString: databaseSettings.ConnectionString,
             name: "MySql Health",
-            failureStatus: HealthStatus.Unhealthy
-        );
+            failureStatus: HealthStatus.Unhealthy,
+            tags: new[] { "ready" });
     }
 
     public static void ConfigureSwagger (this IServiceCollection services)

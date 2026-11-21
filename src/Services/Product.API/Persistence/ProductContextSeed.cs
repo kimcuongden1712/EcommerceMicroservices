@@ -7,9 +7,6 @@ namespace Product.API.Persistence;
 public class ProductContextSeed
 {
     private const int SampleCount = 30;
-    private const int ActiveStatus = 1;
-    private const int PublishedStatus = 1;
-    private const int ReadyStatus = 1;
     private const int ProductEntityType = 2;
     private const string SamplePrefix = "sample-";
 
@@ -63,7 +60,7 @@ public class ProductContextSeed
     private static readonly string[] ColorLabels = ["Black", "Navy", "White", "Olive", "Red", "Gray"];
     private static readonly string[] Sizes = ["XS", "S", "M", "L", "XL", "XXL"];
 
-    public static async Task SeedProductAsync(ProductContext productContext, ILogger logger)
+    public static async Task SeedProductAsync (ProductContext productContext, ILogger logger)
     {
         var added = new Dictionary<string, int>();
 
@@ -86,7 +83,7 @@ public class ProductContextSeed
             added.GetValueOrDefault("outbox"));
     }
 
-    private static async Task<Dictionary<string, Categories>> SeedCategoriesAsync(
+    private static async Task<Dictionary<string, Categories>> SeedCategoriesAsync (
         ProductContext context,
         Dictionary<string, int> added)
     {
@@ -96,8 +93,7 @@ public class ProductContextSeed
             .ToListAsync();
         var categoryBySlug = storedCategories.ToDictionary(x => x.Slug[SamplePrefix.Length..]);
 
-        foreach (var category in Categories.Where(x => x.ParentSlug is null))
-        {
+        foreach (var category in Categories.Where(x => x.ParentSlug is null)) {
             if (categoryBySlug.ContainsKey(category.Slug))
                 continue;
 
@@ -105,7 +101,7 @@ public class ProductContextSeed
             {
                 Name = category.Name,
                 Slug = SamplePrefix + category.Slug,
-                Status = ActiveStatus,
+                Status = Enum.CategoryStatus.Active,
                 SortOrder = 0,
                 Version = 1
             };
@@ -116,8 +112,7 @@ public class ProductContextSeed
 
         await context.SaveChangesAsync();
 
-        foreach (var category in Categories.Where(x => x.ParentSlug is not null))
-        {
+        foreach (var category in Categories.Where(x => x.ParentSlug is not null)) {
             if (categoryBySlug.ContainsKey(category.Slug))
                 continue;
 
@@ -126,7 +121,7 @@ public class ProductContextSeed
                 ParentId = categoryBySlug[category.ParentSlug!].Id,
                 Name = category.Name,
                 Slug = SamplePrefix + category.Slug,
-                Status = ActiveStatus,
+                Status = Enum.CategoryStatus.Active,
                 SortOrder = 1,
                 Version = 1
             };
@@ -139,7 +134,7 @@ public class ProductContextSeed
         return categoryBySlug;
     }
 
-    private static async Task<Dictionary<string, Products>> SeedProductsAsync(
+    private static async Task<Dictionary<string, Products>> SeedProductsAsync (
         ProductContext context,
         IReadOnlyDictionary<string, Categories> categoryBySlug,
         Dictionary<string, int> added)
@@ -152,8 +147,7 @@ public class ProductContextSeed
             .ToDictionaryAsync(x => x.Slug);
         var publishedAt = DateTimeOffset.UtcNow.AddDays(-7);
 
-        for (var index = 0; index < SampleCount; index++)
-        {
+        for (var index = 0; index < SampleCount; index++) {
             var slug = productSlugs[index];
             if (productBySlug.ContainsKey(slug))
                 continue;
@@ -164,7 +158,7 @@ public class ProductContextSeed
                 Name = ProductNames[index],
                 Slug = slug,
                 Description = $"Sample product: {ProductNames[index]}. Designed for everyday comfort and style.",
-                Status = PublishedStatus,
+                Status = Enum.ProductStatus.Published,
                 PublishedAt = publishedAt,
                 Version = 1
             };
@@ -177,7 +171,7 @@ public class ProductContextSeed
         return productBySlug;
     }
 
-    private static async Task<Dictionary<string, ProductVariants>> SeedVariantsAsync(
+    private static async Task<Dictionary<string, ProductVariants>> SeedVariantsAsync (
         ProductContext context,
         IReadOnlyDictionary<string, Products> productBySlug,
         Dictionary<string, int> added)
@@ -189,8 +183,7 @@ public class ProductContextSeed
             .Select(x => x.Sku)
             .ToListAsync();
         var existingSkuSet = existingSkus.ToHashSet(StringComparer.Ordinal);
-        for (var index = 0; index < SampleCount; index++)
-        {
+        for (var index = 0; index < SampleCount; index++) {
             var product = products[index];
             if (existingSkuSet.Contains(skus[index]))
                 continue;
@@ -206,7 +199,7 @@ public class ProductContextSeed
                 SizeCode = Sizes[sizeIndex],
                 SizeLabel = Sizes[sizeIndex],
                 PriceMinor = 2499 + index * 250,
-                Status = ActiveStatus,
+                Status = Enum.ProductVariantStatus.Active,
                 WeightG = 180 + index * 10,
                 LengthMm = 300 + index * 5,
                 WidthMm = 220 + index * 5,
@@ -223,7 +216,7 @@ public class ProductContextSeed
             .ToDictionaryAsync(x => x.Sku);
     }
 
-    private static async Task SeedImagesAsync(
+    private static async Task SeedImagesAsync (
         ProductContext context,
         IReadOnlyDictionary<string, Products> productBySlug,
         Dictionary<string, int> added)
@@ -236,8 +229,7 @@ public class ProductContextSeed
             .ToListAsync();
         var existingAssetSet = existingAssets.ToHashSet(StringComparer.Ordinal);
 
-        for (var index = 0; index < SampleCount; index++)
-        {
+        for (var index = 0; index < SampleCount; index++) {
             if (existingAssetSet.Contains(assetKeys[index]))
                 continue;
 
@@ -254,7 +246,7 @@ public class ProductContextSeed
         await context.SaveChangesAsync();
     }
 
-    private static async Task SeedImageUploadsAsync(
+    private static async Task SeedImageUploadsAsync (
         ProductContext context,
         IReadOnlyDictionary<string, Products> productBySlug,
         Dictionary<string, int> added)
@@ -267,8 +259,7 @@ public class ProductContextSeed
             .ToListAsync();
         var existingStagingKeySet = existingStagingKeys.ToHashSet(StringComparer.Ordinal);
 
-        for (var index = 0; index < SampleCount; index++)
-        {
+        for (var index = 0; index < SampleCount; index++) {
             if (existingStagingKeySet.Contains(stagingKeys[index]))
                 continue;
 
@@ -279,7 +270,7 @@ public class ProductContextSeed
                 AssetKey = CreateAssetKey(index + 1),
                 ExpectedContentType = "image/webp",
                 ExpectedSize = 128000 + index * 1024,
-                Status = ReadyStatus,
+                Status = Enum.ProductImageUploadStatus.Ready,
                 ExpiresAt = DateTimeOffset.UtcNow.AddDays(30)
             });
             Increment(added, "uploads");
@@ -288,7 +279,7 @@ public class ProductContextSeed
         await context.SaveChangesAsync();
     }
 
-    private static async Task SeedAuditAsync(
+    private static async Task SeedAuditAsync (
         ProductContext context,
         IReadOnlyDictionary<string, Products> productBySlug,
         Dictionary<string, int> added)
@@ -302,8 +293,7 @@ public class ProductContextSeed
         var existingCorrelationIdSet = existingCorrelationIds.ToHashSet(StringComparer.Ordinal);
         var occurredAt = DateTimeOffset.UtcNow;
 
-        for (var index = 0; index < SampleCount; index++)
-        {
+        for (var index = 0; index < SampleCount; index++) {
             if (existingCorrelationIdSet.Contains(correlationIds[index]))
                 continue;
 
@@ -323,7 +313,7 @@ public class ProductContextSeed
         await context.SaveChangesAsync();
     }
 
-    private static async Task SeedOutboxAsync(
+    private static async Task SeedOutboxAsync (
         ProductContext context,
         IReadOnlyDictionary<string, Products> productBySlug,
         IReadOnlyDictionary<string, ProductVariants> variantBySku,
@@ -336,8 +326,7 @@ public class ProductContextSeed
             .ToListAsync();
         var occurredAt = DateTimeOffset.UtcNow;
 
-        for (var index = 0; index < SampleCount; index++)
-        {
+        for (var index = 0; index < SampleCount; index++) {
             var seedKey = $"product-api:outbox:{index + 1:000}";
             if (existingPayloads.Any(payload => payload.Contains(seedKey, StringComparison.Ordinal)))
                 continue;
@@ -371,19 +360,19 @@ public class ProductContextSeed
         await context.SaveChangesAsync();
     }
 
-    private static Products[] GetSeedProducts(IReadOnlyDictionary<string, Products> productBySlug) =>
+    private static Products[] GetSeedProducts (IReadOnlyDictionary<string, Products> productBySlug) =>
         Enumerable.Range(1, SampleCount)
             .Select(index => productBySlug[CreateProductSlug(index)])
             .ToArray();
 
-    private static string CreateProductSlug(int index) => $"{SamplePrefix}apparel-{index:000}";
-    private static string CreateSku(int index) => $"SAMPLE-APP-{index:000}-{Colors[(index - 1) % Colors.Length]}-{Sizes[(index - 1) % Sizes.Length]}";
-    private static string CreateAssetKey(int index) => $"sample/catalog/product-{index:000}.webp";
-    private static string CreateStagingKey(int index) => $"sample/staging/upload-{index:000}";
-    private static string CreateCorrelationId(int index) => $"product-api-sample-{index:000}";
+    private static string CreateProductSlug (int index) => $"{SamplePrefix}apparel-{index:000}";
+    private static string CreateSku (int index) => $"SAMPLE-APP-{index:000}-{Colors[(index - 1) % Colors.Length]}-{Sizes[(index - 1) % Sizes.Length]}";
+    private static string CreateAssetKey (int index) => $"sample/catalog/product-{index:000}.webp";
+    private static string CreateStagingKey (int index) => $"sample/staging/upload-{index:000}";
+    private static string CreateCorrelationId (int index) => $"product-api-sample-{index:000}";
 
-    private static void Increment(Dictionary<string, int> counts, string key) =>
+    private static void Increment (Dictionary<string, int> counts, string key) =>
         counts[key] = counts.GetValueOrDefault(key) + 1;
 
-    private sealed record CategorySample(string Name, string Slug, string? ParentSlug);
+    private sealed record CategorySample (string Name, string Slug, string? ParentSlug);
 }

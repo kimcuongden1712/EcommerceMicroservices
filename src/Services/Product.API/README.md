@@ -1,6 +1,12 @@
 # Product API
 
-Catalog HTTP API (`/api/products`) backed by MySQL. The project uses EF Core with `MySql.EntityFrameworkCore`, exposes Swagger and `/hc`, and attempts database migration and seed data during startup.
+Catalog HTTP API (`/api/products`) backed by MySQL. The project uses EF Core with `MySql.EntityFrameworkCore` and applies database migrations synchronously before accepting HTTP traffic. A migration or development seed failure is logged and stops startup.
+
+Health endpoints:
+
+- `/health/live` checks that the API process is running; it does not depend on MySQL.
+- `/health/ready` checks MySQL connectivity and reports whether the API can serve requests.
+- `/hc` remains an aggregate health report for compatibility.
 
 ## Infrastructure and configuration
 

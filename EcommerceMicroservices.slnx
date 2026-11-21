@@ -1,5 +1,29 @@
 <Solution>
   <Folder Name="/document/" />
+  <Folder Name="/document/PRD/">
+    <File Path="document/PRD/01-scope.md" />
+    <File Path="document/PRD/02-storefront.md" />
+    <File Path="document/PRD/03-checkout-inventory.md" />
+    <File Path="document/PRD/04-payment-orders.md" />
+    <File Path="document/PRD/05-shipping-tax.md" />
+    <File Path="document/PRD/06-admin-operations.md" />
+    <File Path="document/PRD/07-architecture.md" />
+    <File Path="document/PRD/08-nfr-load.md" />
+    <File Path="document/PRD/09-release.md" />
+    <File Path="document/PRD/10-decisions.md" />
+    <File Path="document/PRD/README.md" />
+  </Folder>
+  <Folder Name="/document/service/">
+    <File Path="document/service/README.md" />
+  </Folder>
+  <Folder Name="/document/service/product-api/">
+    <File Path="document/service/product-api/01-domain-data.md" />
+    <File Path="document/service/product-api/02-api-contract.md" />
+    <File Path="document/service/product-api/03-processing-integrations.md" />
+    <File Path="document/service/product-api/04-delivery-testing.md" />
+    <File Path="document/service/product-api/Check_Information_DB.sql" />
+    <File Path="document/service/product-api/README.md" />
+  </Folder>
   <Folder Name="/resources/">
     <File Path="resources/BRD_Ecommerce.pdf" />
     <File Path="resources/Microservices-Solution_Architect.jpg" />
