@@ -1,7 +1,9 @@
 using Product.API.Extensions;
 using Product.API.Persistence;
 using Serilog;
-
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 var builder = WebApplication.CreateBuilder(args);
 Log.Information($"Start {builder.Environment.ApplicationName} up");
 try {
@@ -14,13 +16,15 @@ try {
     app.UseInfrastructure();
     app.MigrateDatabase<ProductContext>((context, _) =>
     {
-        ProductContextSeed.SeedProductAsync(context, Log.Logger).Wait();
+        if (builder.Environment.IsDevelopment())
+            ProductContextSeed.SeedProductAsync(context, Log.Logger).GetAwaiter().GetResult();
     })
         .Run();
 }
 catch (Exception ex) {
     var type = ex.GetType().Name;
-    if (type.Equals("StopTheHostException", StringComparison.Ordinal))
+    if (type.Equals("StopTheHostException", StringComparison.Ordinal) ||
+        type.Equals("HostAbortedException", StringComparison.Ordinal))
         throw;
 
     Log.Fatal(ex, $"Unhandled exception: {ex.Message}");
