@@ -162,7 +162,10 @@ namespace Product.API.Migrations
 
                     b.HasIndex("ParentId", "Status", "SortOrder", "Id");
 
-                    b.ToTable("categories", (string)null);
+                    b.ToTable("categories", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_categories_status", "status IN (0, 1)");
+                        });
                 });
 
             modelBuilder.Entity("Product.API.Entities.ProductImageUploads", b =>
@@ -222,7 +225,10 @@ namespace Product.API.Migrations
 
                     b.HasIndex("Status", "ExpiresAt");
 
-                    b.ToTable("product_image_uploads", (string)null);
+                    b.ToTable("product_image_uploads", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_product_image_uploads_status", "status IN (0, 1, 2, 3)");
+                        });
                 });
 
             modelBuilder.Entity("Product.API.Entities.ProductImages", b =>
@@ -351,6 +357,8 @@ namespace Product.API.Migrations
                             t.HasCheckConstraint("ck_product_variants_dimensions", "weight_g > 0 AND length_mm > 0 AND width_mm > 0 AND height_mm > 0");
 
                             t.HasCheckConstraint("ck_product_variants_price", "price_minor BETWEEN 1 AND 99999999");
+
+                            t.HasCheckConstraint("ck_product_variants_status", "status IN (0, 1, 2)");
                         });
                 });
 
@@ -417,6 +425,8 @@ namespace Product.API.Migrations
                     b.ToTable("products", null, t =>
                         {
                             t.HasCheckConstraint("ck_products_description_length", "CHAR_LENGTH(description) <= 10000");
+
+                            t.HasCheckConstraint("ck_products_status", "status IN (0, 1, 2)");
                         });
                 });
 

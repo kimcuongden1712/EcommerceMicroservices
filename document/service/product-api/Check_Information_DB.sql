@@ -39,3 +39,10 @@ SELECT
 FROM information_schema.columns
 WHERE table_schema = 'ProductDb'
 ORDER BY table_name, ordinal_position;
+
+
+'kiểm tra xem có status không hợp lệ không'
+SELECT id, status FROM categories WHERE status NOT IN (0, 1);
+SELECT id, status FROM products WHERE status NOT IN (0, 1, 2);
+SELECT id, status FROM product_variants WHERE status NOT IN (0, 1, 2);
+SELECT id, status FROM product_image_uploads WHERE status NOT IN (0, 1, 2, 3);

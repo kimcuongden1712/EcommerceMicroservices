@@ -1,4 +1,4 @@
-﻿namespace Product.API.Enum
+﻿namespace Product.API.Enums
 {
     public enum ProductStatus
     {

@@ -1,5 +1,5 @@
 using Contracts.Domains;
-using Product.API.Enum;
+using Product.API.Enums;
 
 namespace Product.API.Entities;
 

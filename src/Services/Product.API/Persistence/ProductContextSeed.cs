@@ -101,7 +101,7 @@ public class ProductContextSeed
             {
                 Name = category.Name,
                 Slug = SamplePrefix + category.Slug,
-                Status = Enum.CategoryStatus.Active,
+                Status = Enums.CategoryStatus.Active,
                 SortOrder = 0,
                 Version = 1
             };
@@ -121,7 +121,7 @@ public class ProductContextSeed
                 ParentId = categoryBySlug[category.ParentSlug!].Id,
                 Name = category.Name,
                 Slug = SamplePrefix + category.Slug,
-                Status = Enum.CategoryStatus.Active,
+                Status = Enums.CategoryStatus.Active,
                 SortOrder = 1,
                 Version = 1
             };
@@ -158,7 +158,7 @@ public class ProductContextSeed
                 Name = ProductNames[index],
                 Slug = slug,
                 Description = $"Sample product: {ProductNames[index]}. Designed for everyday comfort and style.",
-                Status = Enum.ProductStatus.Published,
+                Status = Enums.ProductStatus.Published,
                 PublishedAt = publishedAt,
                 Version = 1
             };
@@ -199,7 +199,7 @@ public class ProductContextSeed
                 SizeCode = Sizes[sizeIndex],
                 SizeLabel = Sizes[sizeIndex],
                 PriceMinor = 2499 + index * 250,
-                Status = Enum.ProductVariantStatus.Active,
+                Status = Enums.ProductVariantStatus.Active,
                 WeightG = 180 + index * 10,
                 LengthMm = 300 + index * 5,
                 WidthMm = 220 + index * 5,
@@ -270,7 +270,7 @@ public class ProductContextSeed
                 AssetKey = CreateAssetKey(index + 1),
                 ExpectedContentType = "image/webp",
                 ExpectedSize = 128000 + index * 1024,
-                Status = Enum.ProductImageUploadStatus.Ready,
+                Status = Enums.ProductImageUploadStatus.Ready,
                 ExpiresAt = DateTimeOffset.UtcNow.AddDays(30)
             });
             Increment(added, "uploads");
