@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Product.API.Commons.Enums;
 using Product.API.Entities;
 using ILogger = Serilog.ILogger;
 
@@ -101,7 +102,7 @@ public class ProductContextSeed
             {
                 Name = category.Name,
                 Slug = SamplePrefix + category.Slug,
-                Status = Enums.CategoryStatus.Active,
+                Status = CategoryStatus.Active,
                 SortOrder = 0,
                 Version = 1
             };
@@ -121,7 +122,7 @@ public class ProductContextSeed
                 ParentId = categoryBySlug[category.ParentSlug!].Id,
                 Name = category.Name,
                 Slug = SamplePrefix + category.Slug,
-                Status = Enums.CategoryStatus.Active,
+                Status = CategoryStatus.Active,
                 SortOrder = 1,
                 Version = 1
             };
@@ -158,7 +159,7 @@ public class ProductContextSeed
                 Name = ProductNames[index],
                 Slug = slug,
                 Description = $"Sample product: {ProductNames[index]}. Designed for everyday comfort and style.",
-                Status = Enums.ProductStatus.Published,
+                Status = ProductStatus.Published,
                 PublishedAt = publishedAt,
                 Version = 1
             };
@@ -199,7 +200,7 @@ public class ProductContextSeed
                 SizeCode = Sizes[sizeIndex],
                 SizeLabel = Sizes[sizeIndex],
                 PriceMinor = 2499 + index * 250,
-                Status = Enums.ProductVariantStatus.Active,
+                Status = ProductVariantStatus.Active,
                 WeightG = 180 + index * 10,
                 LengthMm = 300 + index * 5,
                 WidthMm = 220 + index * 5,
@@ -270,7 +271,7 @@ public class ProductContextSeed
                 AssetKey = CreateAssetKey(index + 1),
                 ExpectedContentType = "image/webp",
                 ExpectedSize = 128000 + index * 1024,
-                Status = Enums.ProductImageUploadStatus.Ready,
+                Status = ProductImageUploadStatus.Ready,
                 ExpiresAt = DateTimeOffset.UtcNow.AddDays(30)
             });
             Increment(added, "uploads");

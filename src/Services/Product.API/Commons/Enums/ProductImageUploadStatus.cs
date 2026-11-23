@@ -1,4 +1,4 @@
-﻿namespace Product.API.Enums
+﻿namespace Product.API.Commons.Enums
 {
     public enum ProductImageUploadStatus
     {

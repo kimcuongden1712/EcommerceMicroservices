@@ -4,6 +4,14 @@
 
 Prefix công khai và Admin là `/api/v1`, JSON camelCase. Prefix internal là `/internal/v1` trên mạng nội bộ. Bảng dưới mô tả contract v1 dự kiến.
 
+### Quy tắc quản lý phiên bản
+
+Public Catalog v1 được triển khai riêng trong `Controllers/V1`, `Contracts/V1` và `Services/V1`; URL chứa phiên bản tường minh (`/api/v1`). Contract DTO và quy tắc parse query của v1 không dùng chung với phiên bản API khác. Thay đổi tương thích như thêm endpoint hoặc field tùy chọn có thể bổ sung cho v1. Thay đổi làm client hiện tại hỏng hoặc đổi ý nghĩa dữ liệu phải tạo namespace/DTO/service và route `/api/v2` riêng; không sửa contract v1 để phục vụ v2. Các entity và database vẫn có thể được dùng chung nội bộ, nhưng response v1 phải được project riêng và giữ các kiểm thử tương thích v1.
+
+Không xóa hoặc đổi route v1 trong thời gian hỗ trợ. Việc ngừng hỗ trợ v1 cần có chính sách thời hạn, thông báo và kế hoạch chuyển client riêng.
+
+URL ảnh được dựng từ `CatalogMedia:PublicBaseUrl` và asset key; nếu chưa cấu hình base URL, response dùng đường dẫn tương đối `/catalog/{assetKey}`. Môi trường triển khai cần trỏ base URL tới CDN/object storage thực tế.
+
 ## Public · Anonymous
 
 | Method và path | Đầu vào | Thành công |
@@ -59,6 +67,8 @@ Mặc định `sort=newest`, `page=1`, `pageSize=24`. Cho phép `priceAsc`, `pri
 
 Mọi lệnh sửa aggregate đã tồn tại dùng `If-Match` theo ETag đọc từ GET tương ứng, kể cả tạo variant và thay gallery. Khởi tạo upload chỉ tạo phiên upload nên dùng quyền CatalogAdmin và kiểm tra product tồn tại. Các thao tác trả 201 cho resource có endpoint đọc kèm Location. Description lưu plain text trong MVP. Client không ghi được status qua DTO sửa thông thường.
 
+Admin Catalog v1 được triển khai theo các route category, product và variant ở trên. Policy `CatalogAdmin` yêu cầu token đúng audience và claim `permissions` dạng JSON array chứa `PRODUCT.VIEW`, `PRODUCT.CREATE`, `PRODUCT.UPDATE` theo quy ước permission hiện có của solution. Mutation cần subject claim (`sub`, mapped `NameIdentifier`, hoặc `id`) để ghi audit. Các endpoint upload session và cập nhật gallery phụ thuộc object-storage adapter nên thuộc đợt triển khai media; cho tới khi có adapter, publish sẽ bị từ chối nếu chưa có ảnh chính Ready liên kết với product.
+
 ## Internal · Policy CatalogServiceReader
 
 `POST /internal/v1/catalog/skus:resolve` nhận `{"skus":["TEE-BLK-M","TEE-WHT-S"]}`, tối đa 100 SKU duy nhất sau chuẩn hóa. Trả 200 theo thứ tự request với trạng thái từng SKU `availableForSale`, `notForSale`, `notFound`. SKU bán được trả `productId, variantId, sku, name, colorLabel, sizeLabel, priceMinor, currency, weightG, lengthMm, widthMm, heightMm, productVersion`. Giải nghĩa `availableForSale` chỉ theo catalog. Endpoint đọc nguồn chính hoặc bản đọc đã chứng minh đáp ứng tính nhất quán checkout. Không CDN cache route này.
@@ -67,7 +77,11 @@ Ordering dùng giá và dữ liệu đóng gói để xây quote và snapshot. N
 
 ## Lỗi, version và quyền
 
-Dùng `application/problem+json` với `type, title, status, code, traceId` và `errors` cho validation. Ví dụ mã lỗi `SKU_ALREADY_EXISTS`, `SLUG_ALREADY_EXISTS`, `CATEGORY_HAS_ACTIVE_DEPENDENTS`, `PUBLISH_REQUIREMENTS_NOT_MET`, `VERSION_MISMATCH`.
+Dùng `application/problem+json` cho lỗi request, authorization, catalog và lỗi server. Schema gồm `type, title, status, detail`, cùng các extension `code`, `traceId` và `errors` khi có lỗi theo field. `errors` là map từ tên field sang mảng thông báo. Success trả contract DTO trực tiếp, không bọc `ApiResult`.
+
+Lỗi binding, FluentValidation và validation query/body đều trả 400; lỗi version và business dùng đúng status trong bảng dưới. Lỗi không dự kiến trả 500 với detail chung và traceId; chi tiết exception chỉ ghi log, không trả về client. 404/405 từ routing cũng dùng ProblemDetails khi response chưa có body.
+
+Ví dụ mã lỗi `VALIDATION_FAILED`, `INVALID_CATALOG_QUERY`, `INVALID_ADMIN_PRODUCT_QUERY`, `SKU_ALREADY_EXISTS`, `SLUG_ALREADY_EXISTS`, `CATEGORY_HAS_ACTIVE_DEPENDENTS`, `PUBLISH_REQUIREMENTS_NOT_MET`, `VERSION_MISMATCH`.
 
 | HTTP | Khi dùng |
 |---|---|

@@ -8,11 +8,15 @@ Một project ASP.NET Core `src/Services/Product.API` theo cách tổ chức TED
 
 | Thư mục | Nội dung |
 |---|---|
-| Controllers | PublicCatalog, AdminProducts, AdminCategories, InternalCatalog. Binding, authorization, HTTP status. |
-| Features | Use case đọc/ghi catalog theo Products, Categories, Variants, Images. Validation nghiệp vụ và ranh giới transaction. |
-| Entities và Persistence | Mô hình, EF mappings, migration, truy vấn projection và concurrency token. |
+| Controllers | PublicCatalog, AdminProducts, AdminCategories, InternalCatalog. HTTP binding, authorization, response status và ánh xạ query request sang use case. |
+| Validation | FluentValidation cho body/query request, chạy qua MVC action filter; lỗi được chuẩn hóa thành `ValidationException`. |
+| Services | Điều phối use case, kiểm tra invariant nghiệp vụ/DB và ánh xạ kết quả sang contract; không truy cập `ProductContext` trực tiếp. |
+| Repositories | Truy vấn/projection EF, lưu entity, transaction và khóa dữ liệu; service gọi repository thay vì tự tạo truy vấn DB. |
+| Entities và Persistence | Mô hình, EF mappings, migration, `ProductContext` và concurrency token. |
 | Integrations | Object storage, phát outbox RabbitMQ, adapter hạ tầng có interface tại điểm cần thay thế. |
 | Contracts | Request/response và mã lỗi theo API v1. Không serialize trực tiếp entity. |
+
+`ErrorWrappingMiddleware` là exception boundary duy nhất: exception dùng chung được map thành ProblemDetails; exception không dự kiến trả 500 đã ẩn detail. Middleware không viết đè response lỗi đã có body. Status-code pages chỉ bổ sung ProblemDetails cho response lỗi rỗng.
 
 ## Luồng đọc catalog
 

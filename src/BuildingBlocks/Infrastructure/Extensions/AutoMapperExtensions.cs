@@ -20,8 +20,11 @@ public static class AutoMapperExtension
     }
 
     public static Task<PagedList<TDestination>> PaginatedListAsync<TDestination>(
-        this IQueryable<TDestination> queryable, int pageIndex, int pageSize) where TDestination : class
+        this IQueryable<TDestination> queryable,
+        int pageIndex,
+        int pageSize,
+        CancellationToken cancellationToken = default) where TDestination : class
     {
-        return PagedList<TDestination>.ToPagedList(queryable, pageIndex, pageSize);
+        return PagedList<TDestination>.ToPagedList(queryable, pageIndex, pageSize, cancellationToken);
     }
 }

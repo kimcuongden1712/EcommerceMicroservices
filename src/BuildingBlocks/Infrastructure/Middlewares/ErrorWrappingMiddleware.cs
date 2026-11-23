@@ -1,8 +1,6 @@
-using System.Text.Json;
 using Infrastructure.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Serilog;
-using Shared.SeedWork;
 
 namespace Infrastructure.Middlewares;
 
@@ -19,48 +17,46 @@ public class ErrorWrappingMiddleware
 
     public async Task Invoke(HttpContext context)
     {
-        var errorMsg = string.Empty;
         try
         {
             await _next.Invoke(context);
         }
-        catch (ValidationException ex)
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
-            _logger.Error(ex, ex.Message);
-            errorMsg = ex.Errors.FirstOrDefault().Value.FirstOrDefault();
-            context.Response.StatusCode = StatusCodes.Status406NotAcceptable;
+            return;
+        }
+        catch (ApiException ex)
+        {
+            _logger.Warning(ex, "API request failed with {Code}", ex.Code);
+            if (context.Response.HasStarted)
+                throw;
+
+            context.Response.Clear();
+            context.Response.StatusCode = ex.StatusCode;
+            var problem = ApiExceptionProblemDetails.Create(ex, context.TraceIdentifier);
+            await ApiExceptionProblemDetails.WriteAsync(
+                context.Response,
+                problem,
+                context.RequestAborted);
         }
         catch (Exception ex)
         {
             _logger.Error(ex, ex.Message);
-            errorMsg = ex.Message;
+            if (context.Response.HasStarted)
+                throw;
+
+            context.Response.Clear();
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        }
-
-        if ((!context.Response.HasStarted && context.Response.StatusCode == StatusCodes.Status401Unauthorized) ||
-            context.Response.StatusCode == StatusCodes.Status403Forbidden)
-        {
-            context.Response.ContentType = "application/json";
-
-            var response = new ApiErrorResult<bool>("Unauthorized");
-
-            var json = JsonSerializer.Serialize(response);
-
-            await context.Response.WriteAsync(json);
-        }
-
-        else if (!context.Response.HasStarted && context.Response.StatusCode != StatusCodes.Status204NoContent &&
-                 context.Response.StatusCode != StatusCodes.Status202Accepted &&
-                 context.Response.StatusCode != StatusCodes.Status200OK &&
-                 context.Response.ContentType != "text/html; charset=utf-8")
-        {
-            context.Response.ContentType = "application/json";
-
-            var response = new ApiErrorResult<bool>(errorMsg);
-
-            var json = JsonSerializer.Serialize(response);
-
-            await context.Response.WriteAsync(json);
+            var problem = ApiExceptionProblemDetails.Create(
+                StatusCodes.Status500InternalServerError,
+                "INTERNAL_SERVER_ERROR",
+                "Internal server error",
+                "An unexpected error occurred.",
+                context.TraceIdentifier);
+            await ApiExceptionProblemDetails.WriteAsync(
+                context.Response,
+                problem,
+                context.RequestAborted);
         }
     }
 }

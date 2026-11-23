@@ -1,15 +1,22 @@
 using Contracts.Domains.Interfaces;
+using FluentValidation;
 using Infrastructure.Common;
+using Infrastructure.Exceptions;
 using Infrastructure.Extensions;
 using Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using Product.API.Authorization;
 using Product.API.Persistence;
 using Product.API.Repositories;
 using Product.API.Repositories.Interfaces;
+using Product.API.Services.V1;
+using Product.API.Services.V1.Interfaces;
+using Product.API.Validation;
 using Shared.Configurations;
 using System.Text;
 
@@ -42,16 +49,47 @@ public static class ServiceExtensions
 
     public static IServiceCollection AddInfrastructure (this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddControllers();
+        services.AddScoped<ProductRequestValidationFilter>();
+        services.AddValidatorsFromAssemblyContaining<ProductListQueryRequestValidator>();
+        services.AddControllers(options => options.Filters.AddService<ProductRequestValidationFilter>());
+        services.Configure<ApiBehaviorOptions>(options =>
+        {
+            options.InvalidModelStateResponseFactory = context =>
+            {
+                var errors = context.ModelState
+                    .Where(entry => entry.Value?.Errors.Count > 0)
+                    .ToDictionary(
+                        entry => entry.Key,
+                        entry => entry.Value!.Errors
+                            .Select(error => string.IsNullOrWhiteSpace(error.ErrorMessage)
+                                ? "The request contains an invalid value."
+                                : error.ErrorMessage)
+                            .ToArray());
+                var problem = ApiExceptionProblemDetails.Create(
+                    StatusCodes.Status400BadRequest,
+                    "VALIDATION_FAILED",
+                    "Request validation failed",
+                    "One or more request fields are invalid.",
+                    context.HttpContext.TraceIdentifier,
+                    errors);
+
+                var result = new BadRequestObjectResult(problem);
+                result.ContentTypes.Add("application/problem+json");
+                return result;
+            };
+        });
         services.Configure<RouteOptions>(options => options.LowercaseUrls = true);
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
         services.AddEndpointsApiExplorer();
         services.ConfigureSwagger();
         services.ConfigureProductDbContext(configuration);
         services.AddInfrastructureServices();
+        services.AddScoped<IPublicCatalogService, PublicCatalogService>();
+        services.AddScoped<IAdminCatalogService, AdminCatalogService>();
         // services.AddJwtAuthentication();
         services.ConfigureAuthenticationHandler();
         services.ConfigureAuthorization();
+        services.AddCatalogAdminAuthorization();
         services.ConfigureHealthChecks();
         return services;
     }
@@ -108,7 +146,13 @@ public static class ServiceExtensions
     {
         return services.AddScoped(typeof(IRepositoryBase<,,>), typeof(RepositoryBase<,,>))
                 .AddScoped(typeof(IUnitOfWork<>), typeof(UnitOfWork<>))
+                .AddScoped<ICatalogAuditRepository, CatalogAuditRepository>()
+                .AddScoped<ICatalogOutboxRepository, CatalogOutboxRepository>()
+                .AddScoped<ICategoryRepository, CategoryRepository>()
+                .AddScoped<IProductImageRepository, ProductImageRepository>()
+                .AddScoped<IProductImageUploadRepository, ProductImageUploadRepository>()
                 .AddScoped<IProductRepository, ProductRepository>()
+                .AddScoped<IProductVariantsRepository, ProductVariantsRepository>()
             ;
     }
 
