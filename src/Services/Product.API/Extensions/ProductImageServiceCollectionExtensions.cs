@@ -16,6 +16,13 @@ public static class ProductImageServiceCollectionExtensions
 
         services.AddOptions<ProductMediaOptions>()
             .Bind(configuration.GetSection(ProductMediaOptions.SectionName))
+            .Configure(options =>
+            {
+                // Binding extends initialized collections; replace configured types to avoid duplicates.
+                options.AllowedContentTypes = configuration
+                    .GetSection($"{ProductMediaOptions.SectionName}:AllowedContentTypes")
+                    .Get<string[]>() ?? new ProductMediaOptions().AllowedContentTypes;
+            })
             .Validate(options => options.IsValid(), "ProductMedia configuration is invalid.")
             .ValidateOnStart();
 

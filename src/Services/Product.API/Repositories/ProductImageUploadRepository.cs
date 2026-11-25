@@ -138,6 +138,8 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
             .ExecuteUpdateAsync(update => update
                 .SetProperty(upload => upload.ProcessingStartedAt, now)
                 .SetProperty(upload => upload.AttemptCount, upload => upload.AttemptCount + 1), cancellationToken);
+        if (affected == 1)
+            DetachClaimedUpload(uploadId);
         return affected == 1;
     }
 
@@ -154,6 +156,8 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
                 upload.NextAttemptAt != null && upload.NextAttemptAt <= claimedAt &&
                 (upload.ProcessingStartedAt == null || upload.ProcessingStartedAt < staleClaimBefore))
             .ExecuteUpdateAsync(update => update.SetProperty(upload => upload.ProcessingStartedAt, claimedAt), cancellationToken);
+        if (affected == 1)
+            DetachClaimedUpload(uploadId);
         return affected == 1;
     }
 
@@ -179,7 +183,19 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
             .ExecuteUpdateAsync(update => update
                 .SetProperty(upload => upload.ProcessingStartedAt, claimedAt)
                 .SetProperty(upload => upload.CleanupAttempts, upload => upload.CleanupAttempts + 1), cancellationToken);
+        if (affected == 1)
+            DetachClaimedUpload(uploadId);
         return affected == 1;
+    }
+
+    private void DetachClaimedUpload(long uploadId)
+    {
+        // ExecuteUpdate bypasses tracking. The next read must load the persisted lease
+        // (including database timestamp precision), rather than reuse an earlier batch entity.
+        var tracked = _dbContext.ChangeTracker.Entries<ProductImageUploads>()
+            .SingleOrDefault(entry => entry.Entity.Id == uploadId);
+        if (tracked is not null)
+            tracked.State = EntityState.Detached;
     }
 
     public async Task<bool> MarkExpiredAsync(long uploadId, DateTimeOffset now, CancellationToken cancellationToken)

@@ -91,7 +91,15 @@ public class ProductContext (DbContextOptions<ProductContext> options) : DbConte
         uploads.HasIndex(x => x.StagingKey).IsUnique();
         uploads.HasIndex(x => new { x.Status, x.ExpiresAt });
         uploads.HasIndex(x => new { x.Status, x.NextAttemptAt, x.ExpiresAt });
-        uploads.Property(x => x.ProcessingStartedAt).IsConcurrencyToken();
+        // MySQL's DateTimeOffset reader loses fractional seconds. Preserve the exact
+        // persisted lease through DateTime so the concurrency WHERE clause can match.
+        uploads.Property(x => x.ProcessingStartedAt)
+            .HasConversion(
+                value => value.HasValue ? value.Value.UtcDateTime : (DateTime?)null,
+                value => value.HasValue
+                    ? new DateTimeOffset(DateTime.SpecifyKind(value.Value, DateTimeKind.Utc))
+                    : (DateTimeOffset?)null)
+            .IsConcurrencyToken();
         uploads.HasOne<Products>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
 
         var audit = modelBuilder.Entity<CatalogAudit>();

@@ -183,20 +183,15 @@ namespace Product.API.Migrations
                         .HasAnnotation("MySQL:Collation", "utf8mb4_bin");
 
                     b.Property<int>("AttemptCount")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("int")
-                        .HasDefaultValue(0)
                         .HasColumnName("attempt_count");
 
                     b.Property<int>("CleanupAttempts")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("int")
-                        .HasDefaultValue(0)
                         .HasColumnName("cleanup_attempts");
 
                     b.Property<string>("CorrelationId")
-                        .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
+                        .HasColumnType("longtext")
                         .HasColumnName("correlation_id");
 
                     b.Property<DateTimeOffset>("CreatedAt")
