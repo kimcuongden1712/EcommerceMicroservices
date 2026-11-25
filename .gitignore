@@ -361,3 +361,12 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Local Garage development secrets
+/src/Infrastructure/Garage/.env.garage
+/src/Infrastructure/Garage/.env.product-api-local
+
+.env
+.env.*
+!.env.example
+!/src/Infrastructure/Garage/.env.garage.example

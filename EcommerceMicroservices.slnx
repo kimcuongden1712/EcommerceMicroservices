@@ -13,6 +13,13 @@
     <File Path="document/PRD/10-decisions.md" />
     <File Path="document/PRD/README.md" />
   </Folder>
+  <Folder Name="/document/infrastructure/" />
+  <Folder Name="/document/infrastructure/garage/">
+    <File Path="document/infrastructure/garage/01-garage-s3-implementation-architecture-master-prompt.md" />
+    <File Path="document/infrastructure/garage/02-garage-local-development.md" />
+    <File Path="document/infrastructure/garage/03-garage-access-control.md" />
+    <File Path="document/infrastructure/garage/04-dotnet-object-storage.md" />
+  </Folder>
   <Folder Name="/document/service/">
     <File Path="document/service/README.md" />
   </Folder>
@@ -44,7 +51,18 @@
     <Project Path="src/BuildingBlocks/Common.Logging/Common.Logging.csproj" />
     <Project Path="src/BuildingBlocks/Contracts/Contracts.csproj" />
     <Project Path="src/BuildingBlocks/Infrastructure/Infrastructure.csproj" />
+    <Project Path="src/BuildingBlocks/ObjectStorage.Abstractions/ObjectStorage.Abstractions.csproj" />
+    <Project Path="src/BuildingBlocks/ObjectStorage.S3/ObjectStorage.S3.csproj" />
     <Project Path="src/BuildingBlocks/Shared/Shared.csproj" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/" />
+  <Folder Name="/src/Infrastructure/Garage/">
+    <File Path="src/Infrastructure/Garage/.env.garage.example" />
+    <File Path="src/Infrastructure/Garage/garage.toml" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/Garage/scripts/">
+    <File Path="src/Infrastructure/Garage/scripts/provision-local.ps1" />
+    <File Path="src/Infrastructure/Garage/scripts/verify-local.ps1" />
   </Folder>
   <Folder Name="/src/Saga.Orchestrator/" />
   <Folder Name="/src/Services/" />
@@ -57,5 +75,10 @@
   </Folder>
   <Folder Name="/src/WebApps/">
     <Project Path="src/WebApps/WebHealthStatus/WebHealthStatus.csproj" />
+  </Folder>
+  <Folder Name="/test/" />
+  <Folder Name="/test/BuildingBlocks/">
+    <Project Path="test/BuildingBlocks/ObjectStorage.Abstractions.Tests/ObjectStorage.Abstractions.Tests.csproj" Id="fbed3d86-dff1-4804-9265-e6da7f456c08" />
+    <Project Path="test/BuildingBlocks/ObjectStorage.S3.Tests/ObjectStorage.S3.Tests.csproj" />
   </Folder>
 </Solution>

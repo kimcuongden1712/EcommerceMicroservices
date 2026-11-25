@@ -83,7 +83,7 @@ public class ProductContext (DbContextOptions<ProductContext> options) : DbConte
 
         var uploads = modelBuilder.Entity<ProductImageUploads>();
         uploads.ToTable("product_image_uploads", table =>
-            table.HasCheckConstraint("ck_product_image_uploads_status", "status IN (0, 1, 2, 3)")
+            table.HasCheckConstraint("ck_product_image_uploads_status", "status IN (0, 1, 2, 3, 4)")
         );
         ConfigureBinaryKey(uploads.Property(x => x.StagingKey), 255);
         ConfigureBinaryKey(uploads.Property(x => x.AssetKey), 255);

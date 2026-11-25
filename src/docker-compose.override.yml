@@ -149,6 +149,15 @@ services:
       timeout: 10s
       retries: 5
 
+  garage:
+    container_name: ecommerce_garage
+    env_file:
+      - ./Infrastructure/Garage/.env.garage
+    volumes:
+      - ./Infrastructure/Garage/garage.toml:/etc/garage.toml:ro
+    ports:
+      - "127.0.0.1:3900:3900"
+
   #microservices api sections
   product.api:
     container_name: product.api
