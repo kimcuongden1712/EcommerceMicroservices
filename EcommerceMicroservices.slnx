@@ -30,6 +30,7 @@
     <File Path="document/service/product-api/02-api-contract.md" />
     <File Path="document/service/product-api/03-processing-integrations.md" />
     <File Path="document/service/product-api/04-delivery-testing.md" />
+    <File Path="document/service/product-api/05-product-images.md" />
     <File Path="document/service/product-api/Check_Information_DB.sql" />
     <File Path="document/service/product-api/README.md" />
   </Folder>
