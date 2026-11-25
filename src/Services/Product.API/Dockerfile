@@ -11,6 +11,8 @@ COPY ["BuildingBlocks/Common.Logging/Common.Logging.csproj", "BuildingBlocks/Com
 COPY ["BuildingBlocks/Contracts/Contracts.csproj", "BuildingBlocks/Contracts/"]
 COPY ["BuildingBlocks/Shared/Shared.csproj", "BuildingBlocks/Shared/"]
 COPY ["BuildingBlocks/Infrastructure/Infrastructure.csproj", "BuildingBlocks/Infrastructure/"]
+COPY ["BuildingBlocks/ObjectStorage.Abstractions/ObjectStorage.Abstractions.csproj", "BuildingBlocks/ObjectStorage.Abstractions/"]
+COPY ["BuildingBlocks/ObjectStorage.S3/ObjectStorage.S3.csproj", "BuildingBlocks/ObjectStorage.S3/"]
 RUN dotnet restore "Services/Product.API/Product.API.csproj"
 COPY . .
 WORKDIR "/src/Services/Product.API"

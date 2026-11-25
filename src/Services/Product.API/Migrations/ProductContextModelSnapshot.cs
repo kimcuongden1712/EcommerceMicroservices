@@ -182,6 +182,23 @@ namespace Product.API.Migrations
                         .HasAnnotation("MySQL:Charset", "utf8mb4")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_bin");
 
+                    b.Property<int>("AttemptCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("attempt_count");
+
+                    b.Property<int>("CleanupAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("cleanup_attempts");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasColumnName("correlation_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetime(6)")
                         .HasColumnName("created_at");
@@ -200,9 +217,22 @@ namespace Product.API.Migrations
                         .HasColumnType("datetime(6)")
                         .HasColumnName("expires_at");
 
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<DateTimeOffset?>("ProcessingStartedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("processing_started_at");
+
                     b.Property<long>("ProductId")
                         .HasColumnType("bigint")
                         .HasColumnName("product_id");
+
+                    b.Property<DateTimeOffset?>("StagingDeletedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("staging_deleted_at");
 
                     b.Property<string>("StagingKey")
                         .IsRequired()
@@ -225,9 +255,11 @@ namespace Product.API.Migrations
 
                     b.HasIndex("Status", "ExpiresAt");
 
+                    b.HasIndex("Status", "NextAttemptAt", "ExpiresAt");
+
                     b.ToTable("product_image_uploads", null, t =>
                         {
-                            t.HasCheckConstraint("ck_product_image_uploads_status", "status IN (0, 1, 2, 3)");
+                            t.HasCheckConstraint("ck_product_image_uploads_status", "status IN (0, 1, 2, 3, 4)");
                         });
                 });
 

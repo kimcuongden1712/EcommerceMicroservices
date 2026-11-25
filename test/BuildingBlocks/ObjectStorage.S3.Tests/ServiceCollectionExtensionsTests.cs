@@ -43,19 +43,41 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.DoesNotContain(accessKey, exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Presigned_urls_use_the_public_endpoint_while_storage_operations_keep_the_internal_endpoint()
+    {
+        var services = new ServiceCollection();
+        services.AddS3ObjectStorage(CreateConfiguration(presignedServiceUrl: "http://127.0.0.1:3900"));
+        using var provider = services.BuildServiceProvider();
+
+        var internalClient = provider.GetRequiredService<IAmazonS3>();
+        var storage = provider.GetRequiredService<IObjectStorage>();
+        var upload = await storage.CreatePresignedUploadUrlAsync(
+            "product-staging",
+            "12/test-image",
+            TimeSpan.FromMinutes(5),
+            "image/png");
+
+        Assert.Contains("localhost:3900", internalClient.Config.ServiceURL, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("127.0.0.1", new Uri(upload.Url).Host);
+    }
+
     private static IConfiguration CreateConfiguration(
         string accessKey = "local-test-access-key",
-        string secretKey = "local-test-secret-key")
+        string secretKey = "local-test-secret-key",
+        string? presignedServiceUrl = null)
     {
-        return new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [$"{S3StorageOptions.SectionName}:ServiceUrl"] = "http://localhost:3900",
-                [$"{S3StorageOptions.SectionName}:Region"] = "garage",
-                [$"{S3StorageOptions.SectionName}:AccessKey"] = accessKey,
-                [$"{S3StorageOptions.SectionName}:SecretKey"] = secretKey,
-                [$"{S3StorageOptions.SectionName}:ForcePathStyle"] = "true"
-            })
-            .Build();
+        var values = new Dictionary<string, string?>
+        {
+            [$"{S3StorageOptions.SectionName}:ServiceUrl"] = "http://localhost:3900",
+            [$"{S3StorageOptions.SectionName}:Region"] = "garage",
+            [$"{S3StorageOptions.SectionName}:AccessKey"] = accessKey,
+            [$"{S3StorageOptions.SectionName}:SecretKey"] = secretKey,
+            [$"{S3StorageOptions.SectionName}:ForcePathStyle"] = "true"
+        };
+        if (presignedServiceUrl is not null)
+            values[$"{S3StorageOptions.SectionName}:PresignedServiceUrl"] = presignedServiceUrl;
+
+        return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
     }
 }

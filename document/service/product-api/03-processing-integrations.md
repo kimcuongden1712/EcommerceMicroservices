@@ -37,7 +37,7 @@ Một project ASP.NET Core `src/Services/Product.API` theo cách tổ chức TED
 
 Admin tạo upload session riêng cho product. Upload vào vùng staging private bằng URL có hạn. Đề xuất JPEG, PNG, WebP, tối đa 5 MiB/ảnh, 10 ảnh/product. Worker xác minh kích thước thực, nhận diện và giải mã ảnh, tạo đối tượng ảnh cuối có key bất biến và đánh dấu Ready. Từ chối upload sai format, quá giới hạn hoặc hết hạn. Toàn bộ kiểm tra áp dụng cho dữ liệu nhận thực tế.
 
-`PUT /images` chỉ gắn ảnh Ready thuộc product đang sửa, theo đúng version của product. Gallery có thứ tự và ảnh đầu làm thumbnail. URL public sinh từ asset key đã xuất bản. Giữ staging và ảnh draft ngoài bề mặt đọc công khai. Khi ngừng bán, gỡ tham chiếu public và purge cache theo chính sách CDN. Dọn upload hết hạn và asset mồ côi sau khoảng thời gian giữ cấu hình được, sau khi xác minh không còn tham chiếu.
+`PUT /images` chỉ gắn ảnh Ready thuộc product đang sửa, theo đúng version của product. Gallery có thứ tự và ảnh đầu làm thumbnail. URL public sinh dưới dạng `/api/v1/media/{assetKey}`. Giữ staging và ảnh draft ngoài bề mặt đọc công khai; endpoint media kiểm tra product Published trước khi stream. Dọn upload hết hạn và asset mồ côi sau khoảng thời gian giữ cấu hình được, sau khi xác minh không còn tham chiếu.
 
 ## Ranh giới tích hợp
 

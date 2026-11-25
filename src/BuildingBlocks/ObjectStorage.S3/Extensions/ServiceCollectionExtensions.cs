@@ -28,11 +28,22 @@ public static class ServiceCollectionExtensions
                         UriKind.Absolute,
                         out var uri) &&
                     (uri.Scheme == Uri.UriSchemeHttp ||
-                     uri.Scheme == Uri.UriSchemeHttps),
+                     uri.Scheme == Uri.UriSchemeHttps) &&
+                    string.IsNullOrEmpty(uri.UserInfo) &&
+                    string.IsNullOrEmpty(uri.Query) &&
+                    string.IsNullOrEmpty(uri.Fragment),
                 "A valid HTTP/HTTPS S3 ServiceUrl is required.")
             .Validate(
                 options => !string.IsNullOrWhiteSpace(options.Region),
                 "S3 Region is required.")
+            .Validate(
+                options => string.IsNullOrWhiteSpace(options.PresignedServiceUrl)
+                    || Uri.TryCreate(options.PresignedServiceUrl, UriKind.Absolute, out var presignedUri)
+                    && (presignedUri.Scheme == Uri.UriSchemeHttp || presignedUri.Scheme == Uri.UriSchemeHttps)
+                    && string.IsNullOrEmpty(presignedUri.UserInfo)
+                    && string.IsNullOrEmpty(presignedUri.Query)
+                    && string.IsNullOrEmpty(presignedUri.Fragment),
+                "PresignedServiceUrl must be a valid HTTP/HTTPS URL without credentials or query parameters.")
             .Validate(
                 options => !string.IsNullOrWhiteSpace(options.AccessKey),
                 "S3 AccessKey is required.")
@@ -61,7 +72,33 @@ public static class ServiceCollectionExtensions
             return new AmazonS3Client(credentials, clientConfig);
         });
 
-        services.AddSingleton<IObjectStorage, S3ObjectStorage>();
+        if (!string.IsNullOrWhiteSpace(configuration[$"{S3StorageOptions.SectionName}:PresignedServiceUrl"]))
+        {
+            services.AddKeyedSingleton<IAmazonS3>("ObjectStorage.S3.Presigned", (serviceProvider, _) =>
+            {
+                var options = serviceProvider
+                    .GetRequiredService<IOptions<S3StorageOptions>>()
+                    .Value;
+                var credentials = new BasicAWSCredentials(options.AccessKey, options.SecretKey);
+                var clientConfig = new AmazonS3Config
+                {
+                    ServiceURL = options.PresignedServiceUrl,
+                    AuthenticationRegion = options.Region,
+                    ForcePathStyle = options.ForcePathStyle
+                };
+
+                return new AmazonS3Client(credentials, clientConfig);
+            });
+        }
+
+        services.AddSingleton<IObjectStorage>(serviceProvider =>
+        {
+            var storageClient = serviceProvider.GetRequiredService<IAmazonS3>();
+            var presignedClient = serviceProvider.GetKeyedService<IAmazonS3>("ObjectStorage.S3.Presigned");
+            return presignedClient is null
+                ? new S3ObjectStorage(storageClient)
+                : new S3ObjectStorage(storageClient, presignedClient);
+        });
 
         return services;
     }

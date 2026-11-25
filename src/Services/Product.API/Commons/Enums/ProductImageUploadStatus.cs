@@ -1,10 +1,11 @@
-﻿namespace Product.API.Commons.Enums
+namespace Product.API.Commons.Enums
 {
     public enum ProductImageUploadStatus
     {
         Pending = 0,
         Ready = 1,
         Rejected = 2,
-        Expired = 3
+        Expired = 3,
+        Cleaned = 4
     }
 }

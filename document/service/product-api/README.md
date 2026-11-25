@@ -10,6 +10,7 @@ Product API sở hữu danh mục thời trang, nội dung sản phẩm, ảnh, 
 | [02 — API contract](02-api-contract.md) | Public, Admin, internal, DTO, hợp đồng lỗi và phân quyền |
 | [03 — Xử lý và tích hợp](03-processing-integrations.md) | Kiến trúc code, transaction, cache, ảnh và ranh giới service |
 | [04 — Triển khai và nghiệm thu](04-delivery-testing.md) | Kế hoạch tái sử dụng TEDU, vận hành, test và quyết định mở |
+| [05 — Product Image Architecture](05-product-images.md) | Luồng upload ảnh thực tế, xử lý nền, gallery và phân phối private (English/Vietnamese) |
 
 ## Mục tiêu và truy xuất yêu cầu
 

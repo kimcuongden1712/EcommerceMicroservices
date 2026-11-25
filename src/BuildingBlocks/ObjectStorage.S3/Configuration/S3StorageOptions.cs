@@ -6,6 +6,8 @@ public sealed class S3StorageOptions
 
     public string ServiceUrl { get; set; } = string.Empty;
 
+    public string? PresignedServiceUrl { get; set; }
+
     public string Region { get; set; } = string.Empty;
 
     public string AccessKey { get; set; } = string.Empty;
@@ -17,6 +19,7 @@ public sealed class S3StorageOptions
     public bool IsValid()
     {
         return IsValidServiceUrl(ServiceUrl)
+            && (string.IsNullOrWhiteSpace(PresignedServiceUrl) || IsValidServiceUrl(PresignedServiceUrl))
             && !string.IsNullOrWhiteSpace(Region)
             && !string.IsNullOrWhiteSpace(AccessKey)
             && !string.IsNullOrWhiteSpace(SecretKey);

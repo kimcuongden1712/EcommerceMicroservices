@@ -1,5 +1,7 @@
 # Shared .NET object storage
 
+## English
+
 ## Architecture
 
 `ObjectStorage.Abstractions` defines a provider-neutral API and models. `ObjectStorage.S3` implements that API using the AWS SDK for .NET and is configured for Garage through its S3-compatible endpoint. Business services depend on the abstraction, not on AWS SDK types. The library does not create buckets, apply ACLs, or contain service-specific object naming rules.
@@ -114,3 +116,27 @@ Configure an isolated, pre-provisioned bucket and a dedicated key with object re
 - Garage does not implement S3 bucket versioning. The API does not expose version-management operations.
 - ETags are passed through as provider values and are not promised to be MD5 hashes.
 - Presigned URLs are bearer credentials until expiry; use short expirations and do not log them.
+
+## Tiếng Việt
+
+`ObjectStorage.Abstractions` định nghĩa API và model trung lập với nhà cung cấp. `ObjectStorage.S3` hiện thực API bằng AWS SDK for .NET và kết nối Garage qua S3 endpoint. Business service phụ thuộc abstraction, không phụ thuộc kiểu AWS SDK. Thư viện không tạo bucket, áp ACL hay chứa quy tắc đặt tên object riêng theo service. Garage private; quyền truy cập do quyền bucket của Garage key quyết định.
+
+### Project và cấu hình
+
+- `src/BuildingBlocks/ObjectStorage.Abstractions`: interface, model và `ObjectStorageException`, không phụ thuộc AWS/Garage/database/Product.API.
+- `src/BuildingBlocks/ObjectStorage.S3`: options, adapter và DI registration.
+- `test/BuildingBlocks/ObjectStorage.S3.Tests`: unit test và integration test Garage opt-in.
+
+Cấu hình `ObjectStorage:S3`: `ServiceUrl`, `PresignedServiceUrl` tùy chọn, `Region`, `AccessKey`, `SecretKey`, `ForcePathStyle`. Local region là `garage`, path-style bật. Dùng biến môi trường dạng `ObjectStorage__S3__ServiceUrl`; không commit secret và không dùng Garage RPC/Admin token làm S3 credential. Từ Compose dùng `http://garage:3900`, từ Windows host dùng `http://localhost:3900`. `PresignedServiceUrl` cho phép dùng hostname mà caller của URL có thể truy cập.
+
+Đăng ký bằng `builder.Services.AddS3ObjectStorage(builder.Configuration)`. Options được validate lúc khởi động; URL phải là HTTP(S) tuyệt đối, không có user-info/query/fragment; region/key/secret bắt buộc. AWS S3 client đăng ký singleton.
+
+### Hành vi và xử lý lỗi
+
+Inject `IObjectStorage`. Caller sở hữu stream. Upload cần content length; với stream seekable, length phải bằng số byte còn lại. Download ghi vào stream đích. `GetMetadataAsync` trả null và `ExistsAsync` trả false chỉ khi xác định object NotFound. Lỗi quyền, service, timeout và network được bọc trong `ObjectStorageException` với lỗi gốc ở `InnerException`; cancellation được truyền tiếp. `LastModified` của descriptor sau upload là null vì PutObject không trả giá trị này.
+
+`CopyAsync` nhận bucket/key nguồn và đích; truyền object key gốc chưa URL-escape. Presigned PUT yêu cầu gửi đúng `Content-Type` đã ký. Không sửa URL/query; URL là bearer credential tạm thời, không ghi log và hạn tối đa 7 ngày. Adapter dùng `PutObjectAsync` đơn, không hỗ trợ multipart; ETag không được cam kết là MD5; Garage không hỗ trợ bucket versioning.
+
+### Kiểm thử
+
+Unit test: `dotnet test .\test\BuildingBlocks\ObjectStorage.S3.Tests\ObjectStorage.S3.Tests.csproj`. Garage integration test chỉ chạy khi có đủ `OBJECT_STORAGE_TEST_SERVICE_URL`, `OBJECT_STORAGE_TEST_REGION`, `OBJECT_STORAGE_TEST_ACCESS_KEY`, `OBJECT_STORAGE_TEST_SECRET_KEY`, `OBJECT_STORAGE_TEST_BUCKET`. Chỉ dùng bucket/key riêng biệt đã provision, có quyền object read/write/delete trên bucket đó. Không dùng bucket `product-media` hoặc `product-staging` cho test destructive. Test tạo key ngẫu nhiên và xóa riêng object của nó, không tạo/xóa bucket.

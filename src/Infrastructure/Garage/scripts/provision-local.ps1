@@ -127,6 +127,7 @@ function Save-LocalEnvironmentFile {
 
     $entries = @(
         'GARAGE_S3_ENDPOINT=http://garage:3900'
+        'GARAGE_S3_PUBLIC_ENDPOINT=http://localhost:3900'
         'GARAGE_S3_REGION=garage'
         'GARAGE_PRODUCT_MEDIA_BUCKET=product-media'
         'GARAGE_PRODUCT_STAGING_BUCKET=product-staging'

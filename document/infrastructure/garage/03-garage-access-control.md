@@ -1,5 +1,7 @@
 # Garage access control
 
+## English
+
 ## Architecture
 
 Garage is shared object-storage infrastructure. Each business service receives its own S3 access key and only the bucket permissions required by that service. Applications use the S3 API at `http://garage:3900` on the Compose network; the Garage Admin API and RPC port are not published to the host.
@@ -89,3 +91,13 @@ Revocation immediately removes that key's access to all buckets. Garage CLI requ
 - [Garage CLI reference](https://garagehq.deuxfleurs.fr/documentation/reference-manual/cli/)
 - [Garage Administration API](https://garagehq.deuxfleurs.fr/documentation/reference-manual/admin-api/)
 - [Garage v2.5.0 Admin API specification](https://garagehq.deuxfleurs.fr/api/garage-admin-v2.json)
+
+## Tiếng Việt
+
+Garage là object storage dùng chung. Mỗi business service có S3 key riêng, chỉ được cấp quyền trên bucket cần thiết. Ứng dụng gọi S3 API tại `http://garage:3900` trong Compose; Admin API và RPC không publish ra host. Garage local chạy một node, không HA và không thay thế backup.
+
+Product.API dùng hai bucket private đã provision: `product-media` lưu ảnh được chấp nhận; `product-staging` lưu upload tạm và xác minh. Không bật website/anonymous access. Key `product-api-local` có Read/Write trên đúng hai bucket, không Owner, không quyền CreateBucket toàn cục. Không lưu access key ID hay secret trong tài liệu.
+
+Provision local từ thư mục `src` bằng `provision-local.ps1`, sau đó chạy `verify-local.ps1` theo [hướng dẫn local](./02-garage-local-development.md). Script provision chỉ tạo tài nguyên còn thiếu và không xóa/rotate; nếu quyền key hiện hữu rộng hơn dự kiến thì dừng để tránh tự ý hạ quyền. Verification tạo probe tạm và bucket cô lập để kiểm tra biên quyền, rồi dọn chúng khi an toàn. Không chạy trên môi trường production.
+
+Quy tắc: mỗi service dùng key riêng; chỉ cấp Read/Write ở bucket cần dùng; không dùng Garage Admin/RPC token trong ứng dụng; không chia sẻ Product key; không dùng bucket Product cho integration test xóa dữ liệu; không sửa bucket, credential hoặc policy nếu chưa được duyệt. CORS hiện chưa bật và không phải cơ chế phân quyền.

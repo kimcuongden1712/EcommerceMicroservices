@@ -7,18 +7,15 @@ namespace Product.API.Services.V1;
 
 public sealed class PublicCatalogService : IPublicCatalogService
 {
-    private readonly string? _publicMediaBaseUrl;
     private readonly ICategoryRepository _categoryRepository;
     private readonly IProductRepository _productRepository;
 
     public PublicCatalogService (
         ICategoryRepository categoryRepository,
-        IProductRepository productRepository,
-        IConfiguration configuration)
+        IProductRepository productRepository)
     {
         _categoryRepository = categoryRepository;
         _productRepository = productRepository;
-        _publicMediaBaseUrl = configuration["CatalogMedia:PublicBaseUrl"]?.TrimEnd('/');
     }
 
     public async Task<IReadOnlyList<CategoryResponse>> GetCategoriesAsync (
@@ -100,12 +97,8 @@ public sealed class PublicCatalogService : IPublicCatalogService
 
     private string GetPublicImageUrl (string assetKey)
     {
-        var escapedAssetKey = string.Join(
-            '/',
-            assetKey.Split('/').Select(Uri.EscapeDataString));
+        var escapedAssetKey = string.Join('/', assetKey.Split('/').Select(Uri.EscapeDataString));
 
-        return string.IsNullOrWhiteSpace(_publicMediaBaseUrl)
-            ? $"/catalog/{escapedAssetKey}"
-            : $"{_publicMediaBaseUrl}/{escapedAssetKey}";
+        return $"/api/v1/media/{escapedAssetKey}";
     }
 }

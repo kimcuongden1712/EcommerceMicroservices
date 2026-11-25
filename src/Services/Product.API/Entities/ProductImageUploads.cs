@@ -34,4 +34,35 @@ public class ProductImageUploads : EntityBase<long>
         get; set;
     }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public int AttemptCount
+    {
+        get; set;
+    }
+
+    public int CleanupAttempts
+    {
+        get; set;
+    }
+
+    public string? CorrelationId
+    {
+        get; set;
+    }
+
+    public DateTimeOffset? NextAttemptAt
+    {
+        get; set;
+    }
+
+    public DateTimeOffset? ProcessingStartedAt
+    {
+        get; set;
+    }
+
+    public DateTimeOffset? StagingDeletedAt
+    {
+        get; set;
+    }
+
 }

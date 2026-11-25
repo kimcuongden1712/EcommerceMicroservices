@@ -10,7 +10,9 @@ Public Catalog v1 được triển khai riêng trong `Controllers/V1`, `Contract
 
 Không xóa hoặc đổi route v1 trong thời gian hỗ trợ. Việc ngừng hỗ trợ v1 cần có chính sách thời hạn, thông báo và kế hoạch chuyển client riêng.
 
-URL ảnh được dựng từ `CatalogMedia:PublicBaseUrl` và asset key; nếu chưa cấu hình base URL, response dùng đường dẫn tương đối `/catalog/{assetKey}`. Môi trường triển khai cần trỏ base URL tới CDN/object storage thực tế.
+URL ảnh công khai dùng đường dẫn tương đối `/api/v1/media/{assetKey}`. Product.API chỉ phân phối asset thuộc gallery của product đang Published; bucket Garage vẫn private.
+
+Presigned PUT URL dùng endpoint S3 có thể truy cập từ client; endpoint storage nội bộ của Product.API có thể khác hostname này trong Docker Compose. Cấu hình endpoint công khai chỉ thay đổi URL ký sẵn, không thay endpoint server-to-server.
 
 ## Public · Anonymous
 
@@ -19,6 +21,7 @@ URL ảnh được dựng từ `CatalogMedia:PublicBaseUrl` và asset key; nếu
 | GET /api/v1/categories | Không có | 200. Cây category Active, tối đa hai cấp, sắp xếp theo sortOrder rồi id. |
 | GET /api/v1/products | `q`, `categorySlug`, `color`, `size`, `minPriceMinor`, `maxPriceMinor`, `sort`, `page`, `pageSize` | 200. Trang sản phẩm Published với giá đại diện theo bộ lọc. Không có kết quả trả mảng rỗng. |
 | GET /api/v1/products/{slug} | Slug ổn định | 200. Chi tiết, gallery và variants Active. 404 nếu không công khai hoặc không tồn tại. |
+| GET /api/v1/media/{assetKey} | Asset key từ URL ảnh trong catalog | 200 với bytes ảnh nếu asset thuộc product Published; 404 nếu không công khai hoặc không tồn tại. |
 
 Mặc định `sort=newest`, `page=1`, `pageSize=24`. Cho phép `priceAsc`, `priceDesc`, `newest`. Giới hạn đề xuất pageSize 100 và offset 10.000 bản ghi. Sort tie-break theo ID. `priceAsc` và `priceDesc` dùng cùng giá đại diện là giá nhỏ nhất của các variant khớp bộ lọc. Query tìm tên hoặc SKU bằng từ khóa trim, tối đa 100 ký tự. Tên tìm không phân biệt hoa thường theo collation đã chọn, SKU tìm chính xác sau chuẩn hóa. Filter category không tồn tại trả trang rỗng. Giá lọc trên từng variant, với min ≤ max. Truy vấn vượt giới hạn hoặc sort ngoài danh sách trả 400.
 

@@ -18,7 +18,9 @@
     <File Path="document/infrastructure/garage/01-garage-s3-implementation-architecture-master-prompt.md" />
     <File Path="document/infrastructure/garage/02-garage-local-development.md" />
     <File Path="document/infrastructure/garage/03-garage-access-control.md" />
+    <File Path="document/infrastructure/garage/04-5-garage-documentation-architecture-Refinement-ProductAPI-Refactoring-master-pormpt.md" />
     <File Path="document/infrastructure/garage/04-dotnet-object-storage.md" />
+    <File Path="document/infrastructure/garage/05-grage-integation-productapi-prompt.md" />
   </Folder>
   <Folder Name="/document/service/">
     <File Path="document/service/README.md" />
@@ -80,5 +82,9 @@
   <Folder Name="/test/BuildingBlocks/">
     <Project Path="test/BuildingBlocks/ObjectStorage.Abstractions.Tests/ObjectStorage.Abstractions.Tests.csproj" Id="fbed3d86-dff1-4804-9265-e6da7f456c08" />
     <Project Path="test/BuildingBlocks/ObjectStorage.S3.Tests/ObjectStorage.S3.Tests.csproj" />
+  </Folder>
+  <Folder Name="/test/Services/" />
+  <Folder Name="/test/Services/Product/">
+    <Project Path="test/Services/Product.API.Tests/Product.API.Tests.csproj" />
   </Folder>
 </Solution>

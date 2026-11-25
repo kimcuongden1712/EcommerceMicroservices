@@ -9,10 +9,25 @@ using ObjectStorage.Abstractions.Models;
 
 namespace ObjectStorage.S3.Services;
 
-public sealed class S3ObjectStorage(IAmazonS3 s3Client) : IObjectStorage
+public sealed class S3ObjectStorage : IObjectStorage
 {
     private const string MetadataPrefix = "x-amz-meta-";
     private static readonly TimeSpan MaximumPresignedUrlLifetime = TimeSpan.FromDays(7);
+    private readonly IAmazonS3 _s3Client;
+    private readonly IAmazonS3 _presignedS3Client;
+
+    public S3ObjectStorage(IAmazonS3 s3Client)
+        : this(s3Client, s3Client)
+    {
+    }
+
+    public S3ObjectStorage(IAmazonS3 s3Client, IAmazonS3 presignedS3Client)
+    {
+        ArgumentNullException.ThrowIfNull(s3Client);
+        ArgumentNullException.ThrowIfNull(presignedS3Client);
+        _s3Client = s3Client;
+        _presignedS3Client = presignedS3Client;
+    }
 
     public async Task<ObjectDescriptor> UploadAsync(
         ObjectUploadRequest request,
@@ -74,7 +89,7 @@ public sealed class S3ObjectStorage(IAmazonS3 s3Client) : IObjectStorage
             "Upload",
             request.BucketName,
             request.ObjectKey,
-            () => s3Client.PutObjectAsync(putRequest, cancellationToken),
+            () => _s3Client.PutObjectAsync(putRequest, cancellationToken),
             cancellationToken).ConfigureAwait(false);
 
         return new ObjectDescriptor
@@ -107,7 +122,7 @@ public sealed class S3ObjectStorage(IAmazonS3 s3Client) : IObjectStorage
             objectKey,
             async () =>
             {
-                using var response = await s3Client.GetObjectAsync(
+                using var response = await _s3Client.GetObjectAsync(
                     new GetObjectRequest { BucketName = bucketName, Key = objectKey },
                     cancellationToken).ConfigureAwait(false);
 
@@ -130,7 +145,7 @@ public sealed class S3ObjectStorage(IAmazonS3 s3Client) : IObjectStorage
                 "GetMetadata",
                 bucketName,
                 objectKey,
-                () => s3Client.GetObjectMetadataAsync(
+                () => _s3Client.GetObjectMetadataAsync(
                     new GetObjectMetadataRequest { BucketName = bucketName, Key = objectKey },
                     cancellationToken),
                 cancellationToken).ConfigureAwait(false);
@@ -164,7 +179,7 @@ public sealed class S3ObjectStorage(IAmazonS3 s3Client) : IObjectStorage
                 "Exists",
                 bucketName,
                 objectKey,
-                () => s3Client.GetObjectMetadataAsync(
+                () => _s3Client.GetObjectMetadataAsync(
                     new GetObjectMetadataRequest { BucketName = bucketName, Key = objectKey },
                     cancellationToken),
                 cancellationToken).ConfigureAwait(false);
@@ -188,7 +203,7 @@ public sealed class S3ObjectStorage(IAmazonS3 s3Client) : IObjectStorage
             "Delete",
             bucketName,
             objectKey,
-            () => s3Client.DeleteObjectAsync(
+            () => _s3Client.DeleteObjectAsync(
                 new DeleteObjectRequest { BucketName = bucketName, Key = objectKey },
                 cancellationToken),
             cancellationToken);
@@ -208,7 +223,7 @@ public sealed class S3ObjectStorage(IAmazonS3 s3Client) : IObjectStorage
             "Copy",
             destinationBucketName,
             destinationObjectKey,
-            () => s3Client.CopyObjectAsync(
+            () => _s3Client.CopyObjectAsync(
                 new CopyObjectRequest
                 {
                     SourceBucket = sourceBucketName,
@@ -239,7 +254,7 @@ public sealed class S3ObjectStorage(IAmazonS3 s3Client) : IObjectStorage
                 ["Content-Type"] = contentType
             };
 
-        var url = s3Client.GetPreSignedURL(new GetPreSignedUrlRequest
+        var url = _presignedS3Client.GetPreSignedURL(new GetPreSignedUrlRequest
         {
             BucketName = bucketName,
             Key = objectKey,
@@ -267,7 +282,7 @@ public sealed class S3ObjectStorage(IAmazonS3 s3Client) : IObjectStorage
         ValidateExpiration(expiresIn);
 
         var expiresAt = DateTimeOffset.UtcNow.Add(expiresIn);
-        var url = s3Client.GetPreSignedURL(new GetPreSignedUrlRequest
+        var url = _presignedS3Client.GetPreSignedURL(new GetPreSignedUrlRequest
         {
             BucketName = bucketName,
             Key = objectKey,

@@ -90,6 +90,8 @@ public class ProductContext (DbContextOptions<ProductContext> options) : DbConte
         uploads.Property(x => x.ExpectedContentType).HasMaxLength(100);
         uploads.HasIndex(x => x.StagingKey).IsUnique();
         uploads.HasIndex(x => new { x.Status, x.ExpiresAt });
+        uploads.HasIndex(x => new { x.Status, x.NextAttemptAt, x.ExpiresAt });
+        uploads.Property(x => x.ProcessingStartedAt).IsConcurrencyToken();
         uploads.HasOne<Products>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
 
         var audit = modelBuilder.Entity<CatalogAudit>();

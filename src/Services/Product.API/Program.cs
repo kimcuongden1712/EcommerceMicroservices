@@ -1,5 +1,7 @@
+using ObjectStorage.S3.Extensions;
 using Product.API.Extensions;
 using Product.API.Persistence;
+using Product.API.Validation;
 using Serilog;
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -11,6 +13,11 @@ try {
     // Add services to the container.
     builder.Services.AddConfigurationSettings(builder.Configuration);
     builder.Services.AddInfrastructure(builder.Configuration);
+
+    // Register Phase 3 shared storage
+    builder.Services.AddS3ObjectStorage(builder.Configuration);
+
+    builder.Services.AddProductImageServices(builder.Configuration);
 
     var app = builder.Build();
     app.UseInfrastructure();
