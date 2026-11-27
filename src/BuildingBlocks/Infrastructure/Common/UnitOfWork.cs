@@ -17,8 +17,8 @@ public class UnitOfWork<TContext> : IUnitOfWork<TContext> where TContext : DbCon
         _context.Dispose();
     }
 
-    public Task<int> CommitAsync()
+    public Task<int> CommitAsync(CancellationToken cancellationToken = default)
     {
-        return _context.SaveChangesAsync();
+        return _context.SaveChangesAsync(cancellationToken);
     }
 }

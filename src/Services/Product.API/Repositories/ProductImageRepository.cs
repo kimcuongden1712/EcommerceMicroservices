@@ -12,16 +12,20 @@ namespace Product.API.Repositories
 {
     public class ProductImageRepository : RepositoryBase<ProductImages, long, ProductContext>, IProductImageRepository
     {
-        private readonly ProductContext _dbContext;
+        private readonly IRepositoryBase<Products, long, ProductContext> _products;
+        private readonly ICategoryRepository _categories;
         private readonly IProductImageUploadRepository _uploads;
 
         public ProductImageRepository (
             ProductContext dbContext,
             IUnitOfWork<ProductContext> unitOfWork,
-            IProductImageUploadRepository uploads) : base(dbContext,
+            IProductImageUploadRepository uploads,
+            IRepositoryBase<Products, long, ProductContext> products,
+            ICategoryRepository categories) : base(dbContext,
             unitOfWork)
         {
-            _dbContext = dbContext;
+            _products = products;
+            _categories = categories;
             _uploads = uploads;
         }
 
@@ -57,13 +61,13 @@ namespace Product.API.Repositories
 
         public Task<bool> HasReadyPrimaryImageAsync (long productId, CancellationToken cancellationToken)
         {
+            var readyUploads = _uploads.FindByCondition(upload =>
+                upload.ProductId == productId && upload.Status == ProductImageUploadStatus.Ready);
+
             return FindByCondition(
                 image => image.ProductId == productId &&
                     image.Position == 0 &&
-                    _uploads.FindByCondition(upload =>
-                        upload.ProductId == productId &&
-                        upload.AssetKey == image.AssetKey &&
-                        upload.Status == ProductImageUploadStatus.Ready).Any())
+                    readyUploads.Any(upload => upload.AssetKey == image.AssetKey))
                 .AnyAsync(cancellationToken);
         }
 
@@ -75,10 +79,10 @@ namespace Product.API.Repositories
             CancellationToken cancellationToken)
         {
             var query =
-                from image in _dbContext.ProductImages.AsNoTracking()
-                join product in _dbContext.Products.AsNoTracking() on image.ProductId equals product.Id
-                join category in _dbContext.Categories.AsNoTracking() on product.CategoryId equals category.Id
-                join upload in _dbContext.ProductImageUploads.AsNoTracking()
+                from image in FindByCondition(image => image.AssetKey == assetKey)
+                join product in _products.FindAll() on image.ProductId equals product.Id
+                join category in _categories.FindAll() on product.CategoryId equals category.Id
+                join upload in _uploads.FindAll()
                     on new
                     {
                         image.ProductId,
@@ -88,10 +92,9 @@ namespace Product.API.Repositories
                         upload.ProductId,
                         AssetKey = upload.AssetKey!
                     }
-                where image.AssetKey == assetKey &&
-                      product.Status == ProductStatus.Published &&
+                where product.Status == ProductStatus.Published &&
                       category.Status == CategoryStatus.Active &&
-                      (category.ParentId == null || _dbContext.Categories.Any(parent =>
+                      (category.ParentId == null || _categories.FindAll().Any(parent =>
                           parent.Id == category.ParentId &&
                           parent.Status == CategoryStatus.Active &&
                           parent.ParentId == null)) &&

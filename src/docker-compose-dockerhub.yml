@@ -38,20 +38,6 @@ services:
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.7
 
-  garage:
-    image: dxflrs/garage:v2.5.0
-    command: ["/garage", "server", "--single-node"]
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "/garage", "status"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 20s
-    volumes:
-      - ecommerce_garage_meta:/var/lib/garage/meta
-      - ecommerce_garage_data:/var/lib/garage/data
-
   # Application images published to Docker Hub
   product.api:
     image: kietphamdev/tedu-microservice-product:latest
@@ -124,7 +110,3 @@ volumes:
     name: ecommerce_pgadmin_data
   ecommerce_rabbitmq_data:
     name: ecommerce_rabbitmq_data
-  ecommerce_garage_meta:
-    name: ecommerce_garage_meta
-  ecommerce_garage_data:
-    name: ecommerce_garage_data

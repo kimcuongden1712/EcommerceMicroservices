@@ -1,12 +1,13 @@
 using Infrastructure.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Product.API.Commons;
 using Product.API.Commons.Enums;
 using Product.API.Commons.Exceptions;
 using Product.API.Contracts.V1;
 using Product.API.Entities;
+using Product.API.Extensions;
 using Product.API.Options;
-using Product.API.Persistence;
 using Product.API.Repositories.Interfaces;
 using Product.API.Services.V1.Interfaces;
 using System.Globalization;
@@ -16,40 +17,44 @@ namespace Product.API.Services.V1;
 
 public sealed class ProductImageGalleryService : IProductImageGalleryService
 {
-    private readonly ProductContext _dbContext;
     private readonly IProductRepository _productRepository;
-    private readonly IProductImageRepository _imageRepository;
-    private readonly IProductImageUploadRepository _uploadRepository;
-    private readonly ProductMediaOptions _options;
+    private readonly IProductImageRepository _productImageRepository;
+    private readonly IProductImageUploadRepository _productImageUploadRepository;
+    private readonly ProductMediaOptions _productMediaOptions;
+    private readonly ICatalogAuditRepository _catalogAuditRepository;
+    private readonly ICatalogOutboxRepository _catalogOutboxRepository;
 
-    public ProductImageGalleryService(
-        ProductContext dbContext,
+    public ProductImageGalleryService (
         IProductRepository productRepository,
-        IProductImageRepository imageRepository,
-        IProductImageUploadRepository uploadRepository,
-        Microsoft.Extensions.Options.IOptions<ProductMediaOptions> options)
+        IProductImageRepository productImageRepository,
+        IProductImageUploadRepository productImageUploadRepository,
+        ICatalogAuditRepository catalogAuditRepository,
+        ICatalogOutboxRepository catalogOutboxRepository,
+        IOptions<ProductMediaOptions> productMediaOptions)
     {
-        _dbContext = dbContext;
         _productRepository = productRepository;
-        _imageRepository = imageRepository;
-        _uploadRepository = uploadRepository;
-        _options = options.Value;
+        _productImageRepository = productImageRepository;
+        _productImageUploadRepository = productImageUploadRepository;
+        _catalogAuditRepository = catalogAuditRepository;
+        _catalogOutboxRepository = catalogOutboxRepository;
+        _productMediaOptions = productMediaOptions.Value;
     }
 
-    public async Task<ProductImageGalleryResult> ReplaceGalleryAsync(
+    #region Image gallery
+
+    public async Task<ProductImageGalleryResult> ReplaceGalleryAsync (
         long productId,
         long expectedVersion,
         ReplaceProductImagesRequest request,
         CatalogAuditContext auditContext,
         CancellationToken cancellationToken)
     {
-        if (request.Images.Count > _options.MaxImagesPerProduct)
+        if (request.Images.Count > _productMediaOptions.MaxImagesPerProduct)
             throw new ProductMediaException("IMAGE_LIMIT_EXCEEDED", "The gallery exceeds the maximum image count.");
 
         var uploadIds = new List<long>(request.Images.Count);
         var assetKeys = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var image in request.Images)
-        {
+        foreach (var image in request.Images) {
             if (!long.TryParse(image.UploadId, NumberStyles.None, CultureInfo.InvariantCulture, out var uploadId) || uploadId <= 0)
                 throw new BadRequestException(
                     "UploadId must be a positive integer.",
@@ -62,9 +67,8 @@ public sealed class ProductImageGalleryService : IProductImageGalleryService
                 throw new ProductMediaException("ALT_TEXT_TOO_LONG", "Image alt text cannot exceed 160 characters.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
-        {
+        await using var transaction = await _productImageRepository.BeginTransactionAsync(cancellationToken);
+        try {
             var product = await _productRepository.LockProductAsync(productId, cancellationToken);
             if (product is null)
                 throw CatalogAdminException.NotFound("product");
@@ -78,9 +82,8 @@ public sealed class ProductImageGalleryService : IProductImageGalleryService
                     "A published product must retain at least one ready gallery image.");
 
             var uploads = new List<ProductImageUploads>(request.Images.Count);
-            for (var index = 0; index < request.Images.Count; index++)
-            {
-                var upload = await _uploadRepository.GetProductImageUploadAsync(
+            for (var index = 0; index < request.Images.Count; index++) {
+                var upload = await _productImageUploadRepository.GetProductImageUploadAsync(
                     productId,
                     uploadIds[index],
                     cancellationToken);
@@ -91,24 +94,21 @@ public sealed class ProductImageGalleryService : IProductImageGalleryService
                 if (!assetKeys.Add(upload.AssetKey))
                     throw new ProductMediaException("DUPLICATE_ASSET_KEY", "The gallery cannot contain the same asset more than once.");
                 upload.NextAttemptAt = null;
-                _uploadRepository.Update(upload);
+                _productImageUploadRepository.Update(upload);
                 uploads.Add(upload);
             }
 
-            var existing = await _dbContext.ProductImages
-                .Where(image => image.ProductId == productId)
+            var existing = await _productImageRepository.FindByCondition(image => image.ProductId == productId)
                 .OrderBy(image => image.Position)
                 .ThenBy(image => image.Id)
                 .ToListAsync(cancellationToken);
             var oldAssetKeys = existing.Select(image => image.AssetKey).ToHashSet(StringComparer.Ordinal);
             var removedAssetKeys = oldAssetKeys.Except(assetKeys, StringComparer.Ordinal).ToArray();
 
-            _dbContext.ProductImages.RemoveRange(existing);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _productImageRepository.DeleteListAsync(existing, cancellationToken);
 
-            for (var position = 0; position < uploads.Count; position++)
-            {
-                _dbContext.ProductImages.Add(new ProductImages
+            for (var position = 0; position < uploads.Count; position++) {
+                _productImageRepository.Create(new ProductImages
                 {
                     ProductId = productId,
                     AssetKey = uploads[position].AssetKey!,
@@ -118,18 +118,17 @@ public sealed class ProductImageGalleryService : IProductImageGalleryService
             }
 
             var now = DateTimeOffset.UtcNow;
-            foreach (var key in removedAssetKeys)
-            {
-                await _uploadRepository.MarkAssetUnreferencedForCleanupAsync(
+            foreach (var key in removedAssetKeys) {
+                await _productImageUploadRepository.MarkAssetUnreferencedForCleanupAsync(
                     key,
-                    now.AddMinutes(_options.CleanupRetentionMinutes),
+                    now.AddMinutes(_productMediaOptions.CleanupRetentionMinutes),
                     cancellationToken);
             }
 
             var previousVersion = product.Version;
             product.Version++;
-            _dbContext.Products.Update(product);
-            _dbContext.CatalogAudit.Add(new CatalogAudit
+            _productRepository.Update(product);
+            _catalogAuditRepository.Create(new CatalogAudit
             {
                 EntityType = Const.PRODUCTENTITYTYPE,
                 EntityId = productId,
@@ -145,7 +144,7 @@ public sealed class ProductImageGalleryService : IProductImageGalleryService
                 }),
                 OccurredAt = now
             });
-            _dbContext.CatalogOutbox.Add(new CatalogOutbox
+            _catalogOutboxRepository.Create(new CatalogOutbox
             {
                 Topic = "catalog.product.changed.v1",
                 PayloadJson = JsonSerializer.Serialize(new
@@ -163,32 +162,20 @@ public sealed class ProductImageGalleryService : IProductImageGalleryService
                 OccurredAt = now
             });
 
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            await _productImageRepository.EndTransactionAsync(cancellationToken);
 
-            var result = await _imageRepository.GetProductImagesAsync(productId, cancellationToken);
+            var result = await _productImageRepository.GetProductImagesAsync(productId, cancellationToken);
             return new ProductImageGalleryResult(product.Version, result);
         }
-        catch (DbUpdateConcurrencyException)
-        {
-            await transaction.RollbackAsync(CancellationToken.None);
+        catch (DbUpdateConcurrencyException) {
+            await _productImageRepository.RollbackTransactionAsync(CancellationToken.None);
             throw CatalogAdminException.PreconditionFailed();
         }
-        catch
-        {
-            await transaction.RollbackAsync(CancellationToken.None);
+        catch {
+            await _productImageRepository.RollbackTransactionAsync(CancellationToken.None);
             throw;
         }
     }
-}
 
-internal static class CollectionExtensions
-{
-    public static bool AddDistinct<T>(this ICollection<T> collection, T value)
-    {
-        if (collection.Contains(value))
-            return false;
-        collection.Add(value);
-        return true;
-    }
+    #endregion
 }

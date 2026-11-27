@@ -1,7 +1,6 @@
 using ObjectStorage.S3.Extensions;
 using Product.API.Extensions;
 using Product.API.Persistence;
-using Product.API.Validation;
 using Serilog;
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()

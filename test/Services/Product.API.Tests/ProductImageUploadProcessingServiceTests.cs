@@ -17,6 +17,124 @@ public sealed class ProductImageUploadProcessingServiceTests
     private static readonly CancellationToken TestToken = CancellationToken.None;
     private static readonly byte[] OnePixelPng = CreateOnePixelPng();
 
+    [Theory]
+    [InlineData("download")]
+    [InlineData("storage_failure")]
+    [InlineData("invalid_metadata")]
+    [InlineData("missing_metadata")]
+    public async Task Cancellation_still_persists_rejection_or_retry_before_stopping(string scenario)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var token = cancellation.Token;
+        var upload = CreateUpload(OnePixelPng.Length);
+        upload.ProcessingStartedAt = DateTimeOffset.UtcNow;
+        var repository = new Mock<IProductImageUploadRepository>(MockBehavior.Strict);
+        repository.Setup(store => store.TryClaimPendingUploadAsync(upload.Id, It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), token))
+            .ReturnsAsync(true);
+        repository.Setup(store => store.GetUploadByIdAsync(upload.Id, true, token)).ReturnsAsync(upload);
+        repository.Setup(store => store.GetUploadByIdAsync(upload.Id, true, CancellationToken.None)).ReturnsAsync(upload);
+        repository.Setup(store => store.UpdateAsync(upload, CancellationToken.None))
+            .Callback(() => {
+                Assert.True(token.IsCancellationRequested);
+                Assert.Null(upload.ProcessingStartedAt);
+                Assert.NotNull(upload.NextAttemptAt);
+                Assert.Equal(scenario == "invalid_metadata" ? ProductImageUploadStatus.Rejected : ProductImageUploadStatus.Pending, upload.Status);
+            })
+            .Returns(Task.CompletedTask);
+        var storage = new Mock<IObjectStorage>(MockBehavior.Strict);
+        storage.Setup(store => store.GetMetadataAsync("product-staging", upload.StagingKey, token))
+            .Returns(() => {
+                if (scenario != "download")
+                    cancellation.Cancel();
+                if (scenario == "storage_failure")
+                    return Task.FromException<ObjectMetadata?>(new ObjectStorageException("GetMetadata", "product-staging", upload.StagingKey, "Unavailable"));
+                return Task.FromResult<ObjectMetadata?>(scenario == "missing_metadata" ? null : new ObjectMetadata
+                {
+                    Key = upload.StagingKey,
+                    ContentType = "image/png",
+                    ContentLength = scenario == "invalid_metadata" ? upload.ExpectedSize + 1 : upload.ExpectedSize
+                });
+            });
+        if (scenario == "download")
+            storage.Setup(store => store.DownloadAsync("product-staging", upload.StagingKey, It.IsAny<Stream>(), token))
+                .Returns(() => {
+                    cancellation.Cancel();
+                    return Task.FromCanceled(token);
+                });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateService(repository, storage).ProcessUploadAsync(upload, token));
+
+        repository.Verify(store => store.UpdateAsync(upload, CancellationToken.None), Times.Once);
+        if (scenario != "invalid_metadata")
+            repository.Verify(store => store.GetUploadByIdAsync(upload.Id, true, CancellationToken.None), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cleanup_rolls_back_with_an_independent_token_and_preserves_original_failure(bool cancelledOperation)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var token = cancellation.Token;
+        var upload = CreateUpload(OnePixelPng.Length);
+        upload.Status = ProductImageUploadStatus.Ready;
+        var uploads = new Mock<IProductImageUploadRepository>(MockBehavior.Strict);
+        uploads.Setup(store => store.GetUnreferencedReadyUploadsAsync(It.IsAny<DateTimeOffset>(), It.IsAny<int>(), token))
+            .ReturnsAsync([upload]);
+        uploads.Setup(store => store.TryClaimOrphanedReadyUploadAsync(upload.Id, It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), token))
+            .ReturnsAsync(true);
+        uploads.Setup(store => store.GetUploadByIdAsync(upload.Id, true, token)).ReturnsAsync(upload);
+        var products = new Mock<IProductRepository>(MockBehavior.Strict);
+        products.Setup(store => store.BeginTransactionAsync(token))
+            .ReturnsAsync(Mock.Of<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>());
+        Exception original = cancelledOperation ? new OperationCanceledException(token) : new IOException("Lock failed.");
+        products.Setup(store => store.LockProductAsync(upload.ProductId, token))
+            .Returns(() => {
+                cancellation.Cancel();
+                return Task.FromException<Products?>(original);
+            });
+        products.Setup(store => store.RollbackTransactionAsync(CancellationToken.None)).Returns(Task.CompletedTask);
+        var service = new ProductImageUploadProcessingService(
+            products.Object, Mock.Of<IProductImageRepository>(), uploads.Object, Mock.Of<IObjectStorage>(),
+            Microsoft.Extensions.Options.Options.Create(new ProductMediaOptions()), NullLogger<ProductImageUploadProcessingService>.Instance);
+
+        var exception = await Record.ExceptionAsync(() => service.ProcessCleanupAsync(token));
+
+        Assert.Same(original, exception);
+        products.Verify(store => store.RollbackTransactionAsync(CancellationToken.None), Times.Once);
+        products.Verify(store => store.EndTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cleanup_schedules_retry_even_when_worker_token_is_cancelled(bool cancelledOperation)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var token = cancellation.Token;
+        var upload = CreateUpload(OnePixelPng.Length);
+        upload.Status = ProductImageUploadStatus.Ready;
+        var uploads = new Mock<IProductImageUploadRepository>(MockBehavior.Strict);
+        uploads.Setup(store => store.GetUnreferencedReadyUploadsAsync(It.IsAny<DateTimeOffset>(), It.IsAny<int>(), token))
+            .ReturnsAsync(Array.Empty<ProductImageUploads>());
+        uploads.Setup(store => store.GetCleanupUploadsAsync(It.IsAny<int>(), token)).ReturnsAsync([upload]);
+        uploads.Setup(store => store.TryClaimCleanupUploadAsync(upload.Id, It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), token))
+            .ReturnsAsync(true);
+        uploads.Setup(store => store.GetUploadByIdAsync(upload.Id, true, token)).ReturnsAsync(upload);
+        uploads.Setup(store => store.ScheduleCleanupRetryAsync(upload.Id, It.IsAny<DateTimeOffset>(), CancellationToken.None))
+            .Callback(() => Assert.True(token.IsCancellationRequested)).Returns(Task.CompletedTask);
+        var storage = new Mock<IObjectStorage>(MockBehavior.Strict);
+        storage.Setup(store => store.ExistsAsync("product-staging", upload.StagingKey, token))
+            .Returns(() => {
+                cancellation.Cancel();
+                return Task.FromException<bool>(cancelledOperation ? new OperationCanceledException(token) : new IOException("Storage failed."));
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateService(uploads, storage).ProcessCleanupAsync(token));
+
+        uploads.Verify(store => store.ScheduleCleanupRetryAsync(upload.Id, It.IsAny<DateTimeOffset>(), CancellationToken.None), Times.Once);
+    }
+
     [Fact]
     public async Task Validated_image_bytes_are_written_to_media_and_session_becomes_ready()
     {
@@ -25,7 +143,7 @@ public sealed class ProductImageUploadProcessingServiceTests
         repository.Setup(store => store.TryClaimPendingUploadAsync(upload.Id, It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), TestToken))
             .ReturnsAsync(true);
         repository.Setup(store => store.GetUploadByIdAsync(upload.Id, true, TestToken)).ReturnsAsync(upload);
-        repository.Setup(store => store.SaveChangesAsync()).ReturnsAsync(1);
+        repository.Setup(store => store.UpdateAsync(upload, CancellationToken.None)).Returns(Task.CompletedTask);
 
         var storage = new Mock<IObjectStorage>();
         storage.Setup(store => store.GetMetadataAsync("product-staging", upload.StagingKey, TestToken))
@@ -84,7 +202,7 @@ public sealed class ProductImageUploadProcessingServiceTests
             storedRequest?.Metadata["content-sha256"]);
         Assert.Equal(OnePixelPng, storedBytes);
         storage.Verify(store => store.CopyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), TestToken), Times.Never);
-        repository.Verify(store => store.SaveChangesAsync(), Times.Once);
+        repository.Verify(store => store.UpdateAsync(upload, CancellationToken.None), Times.Once);
     }
 
     [Fact]
@@ -96,7 +214,7 @@ public sealed class ProductImageUploadProcessingServiceTests
         repository.Setup(store => store.TryClaimPendingUploadAsync(upload.Id, It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), TestToken))
             .ReturnsAsync(true);
         repository.Setup(store => store.GetUploadByIdAsync(upload.Id, true, TestToken)).ReturnsAsync(upload);
-        repository.Setup(store => store.SaveChangesAsync()).ReturnsAsync(1);
+        repository.Setup(store => store.UpdateAsync(upload, CancellationToken.None)).Returns(Task.CompletedTask);
 
         var storage = new Mock<IObjectStorage>();
         storage.Setup(store => store.GetMetadataAsync("product-staging", upload.StagingKey, TestToken))
@@ -114,6 +232,7 @@ public sealed class ProductImageUploadProcessingServiceTests
         await service.ProcessUploadAsync(upload, TestToken);
 
         Assert.Equal(ProductImageUploadStatus.Rejected, upload.Status);
+        repository.Verify(store => store.UpdateAsync(upload, CancellationToken.None), Times.Once);
         storage.Verify(store => store.UploadAsync(It.IsAny<ObjectUploadRequest>(), It.IsAny<Stream>(), It.IsAny<long>(), TestToken), Times.Never);
         storage.Verify(store => store.GetMetadataAsync("product-media", It.IsAny<string>(), TestToken), Times.Never);
     }
@@ -142,7 +261,7 @@ public sealed class ProductImageUploadProcessingServiceTests
         repository.Setup(store => store.TryClaimPendingUploadAsync(upload.Id, It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), TestToken))
             .ReturnsAsync(true);
         repository.Setup(store => store.GetUploadByIdAsync(upload.Id, true, TestToken)).ReturnsAsync(upload);
-        repository.Setup(store => store.SaveChangesAsync()).ReturnsAsync(1);
+        repository.Setup(store => store.UpdateAsync(upload, CancellationToken.None)).Returns(Task.CompletedTask);
         var storage = new Mock<IObjectStorage>();
         storage.Setup(store => store.GetMetadataAsync("product-staging", upload.StagingKey, TestToken))
             .ReturnsAsync((ObjectMetadata?)null);
@@ -152,6 +271,7 @@ public sealed class ProductImageUploadProcessingServiceTests
 
         Assert.Equal(ProductImageUploadStatus.Pending, upload.Status);
         Assert.True(upload.NextAttemptAt > DateTimeOffset.UtcNow);
+        repository.Verify(store => store.UpdateAsync(upload, CancellationToken.None), Times.Once);
         storage.Verify(store => store.DownloadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Stream>(), TestToken), Times.Never);
         storage.Verify(store => store.UploadAsync(It.IsAny<ObjectUploadRequest>(), It.IsAny<Stream>(), It.IsAny<long>(), TestToken), Times.Never);
     }
@@ -178,7 +298,7 @@ public sealed class ProductImageUploadProcessingServiceTests
             .ReturnsAsync(true);
         repository.Setup(store => store.GetUploadByIdAsync(upload.Id, true, TestToken))
             .ReturnsAsync(upload);
-        repository.Setup(store => store.SaveChangesAsync()).ReturnsAsync(1);
+        repository.Setup(store => store.UpdateAsync(upload, CancellationToken.None)).Returns(Task.CompletedTask);
 
         var storage = new Mock<IObjectStorage>();
         storage.Setup(store => store.ExistsAsync("product-staging", upload.StagingKey, TestToken))
@@ -191,6 +311,7 @@ public sealed class ProductImageUploadProcessingServiceTests
 
         Assert.NotNull(upload.StagingDeletedAt);
         Assert.True(upload.NextAttemptAt > DateTimeOffset.UtcNow);
+        repository.Verify(store => store.UpdateAsync(upload, CancellationToken.None), Times.Once);
         storage.Verify(store => store.DeleteAsync("product-staging", upload.StagingKey, TestToken), Times.Once);
         storage.Verify(store => store.DeleteAsync("product-media", It.IsAny<string>(), TestToken), Times.Never);
     }
@@ -225,14 +346,14 @@ public sealed class ProductImageUploadProcessingServiceTests
             .ReturnsAsync(true);
         uploadRepository.Setup(store => store.GetUploadByIdAsync(upload.Id, true, TestToken))
             .ReturnsAsync(upload);
-        uploadRepository.Setup(store => store.SaveChangesAsync()).ReturnsAsync(1);
+        uploadRepository.Setup(store => store.UpdateAsync(upload, CancellationToken.None)).Returns(Task.CompletedTask);
 
         var productRepository = new Mock<IProductRepository>();
-        productRepository.Setup(store => store.BeginTransactionAsync())
+        productRepository.Setup(store => store.BeginTransactionAsync(TestToken))
             .ReturnsAsync(Mock.Of<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>());
         productRepository.Setup(store => store.LockProductAsync(upload.ProductId, TestToken))
             .ReturnsAsync(new Products { Id = upload.ProductId, Name = "Test", Slug = "test" });
-        productRepository.Setup(store => store.EndTransactionAsync()).Returns(Task.CompletedTask);
+        productRepository.Setup(store => store.EndTransactionAsync(CancellationToken.None)).Returns(Task.CompletedTask);
 
         var imageRepository = new Mock<IProductImageRepository>();
         imageRepository.Setup(store => store.HasAssetReferenceAsync(upload.AssetKey!, TestToken))
@@ -252,9 +373,11 @@ public sealed class ProductImageUploadProcessingServiceTests
 
         Assert.Equal(ProductImageUploadStatus.Cleaned, upload.Status);
         Assert.Null(upload.AssetKey);
+        uploadRepository.Verify(store => store.UpdateAsync(upload, CancellationToken.None), Times.Exactly(2));
         storage.Verify(store => store.DeleteAsync("product-media", It.IsAny<string>(), TestToken), Times.Once);
         storage.Verify(store => store.DeleteAsync("product-staging", It.IsAny<string>(), TestToken), Times.Never);
-        productRepository.Verify(store => store.EndTransactionAsync(), Times.Once);
+        productRepository.Verify(store => store.BeginTransactionAsync(TestToken), Times.Once);
+        productRepository.Verify(store => store.EndTransactionAsync(CancellationToken.None), Times.Once);
     }
 
     private static ProductImageUploads CreateUpload(long contentLength) => new()

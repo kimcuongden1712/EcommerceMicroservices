@@ -12,11 +12,19 @@ namespace Product.API.Repositories;
 public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUploads, long, ProductContext>, IProductImageUploadRepository
 {
     private readonly ProductContext _dbContext;
+    private readonly IRepositoryBase<ProductImages, long, ProductContext> _images;
 
-    public ProductImageUploadRepository(ProductContext dbContext, IUnitOfWork<ProductContext> unitOfWork)
-        : base(dbContext, unitOfWork) => _dbContext = dbContext;
+    public ProductImageUploadRepository (
+        ProductContext dbContext,
+        IUnitOfWork<ProductContext> unitOfWork,
+        IRepositoryBase<ProductImages, long, ProductContext> images)
+        : base(dbContext, unitOfWork)
+    {
+        _dbContext = dbContext;
+        _images = images;
+    }
 
-    public async Task<IReadOnlyList<ProductImageUploads>> GetPendingUploadsAsync(
+    public async Task<IReadOnlyList<ProductImageUploads>> GetPendingUploadsAsync (
         DateTimeOffset now,
         DateTimeOffset staleClaimBefore,
         int batchSize,
@@ -32,7 +40,7 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<ProductImageUploads>> GetExpiredUploadsAsync(
+    public async Task<IReadOnlyList<ProductImageUploads>> GetExpiredUploadsAsync (
         int batchSize,
         CancellationToken cancellationToken)
     {
@@ -47,7 +55,7 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<ProductImageUploads>> GetCleanupUploadsAsync(
+    public async Task<IReadOnlyList<ProductImageUploads>> GetCleanupUploadsAsync (
         int batchSize,
         CancellationToken cancellationToken)
     {
@@ -70,7 +78,7 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<ProductImageUploads>> GetUnreferencedReadyUploadsAsync(
+    public async Task<IReadOnlyList<ProductImageUploads>> GetUnreferencedReadyUploadsAsync (
         DateTimeOffset olderThan,
         int batchSize,
         CancellationToken cancellationToken)
@@ -79,7 +87,7 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
                 upload.Status == ProductImageUploadStatus.Ready &&
                 upload.StagingDeletedAt != null &&
                 upload.AssetKey != null &&
-                !_dbContext.ProductImages.Any(image => image.AssetKey == upload.AssetKey) &&
+                !_images.FindAll().Any(image => image.AssetKey == upload.AssetKey) &&
                 upload.NextAttemptAt != null && upload.NextAttemptAt <= olderThan &&
                 (upload.ProcessingStartedAt == null || upload.ProcessingStartedAt < olderThan - ProductImageUploadDefaults.ProcessingLease))
             .OrderBy(upload => upload.CreatedAt)
@@ -87,30 +95,29 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
             .ToListAsync(cancellationToken);
     }
 
-    public Task<ProductImageUploads?> GetUploadByIdAsync(long uploadId, bool trackChanges, CancellationToken cancellationToken) =>
+    public Task<ProductImageUploads?> GetUploadByIdAsync (long uploadId, bool trackChanges, CancellationToken cancellationToken) =>
         FindByCondition(upload => upload.Id == uploadId, trackChanges).SingleOrDefaultAsync(cancellationToken);
 
-    public Task<ProductImageUploads?> GetProductImageUploadAsync(
+    public Task<ProductImageUploads?> GetProductImageUploadAsync (
         long productId,
         long uploadId,
         CancellationToken cancellationToken) =>
         FindByCondition(upload => upload.Id == uploadId && upload.ProductId == productId)
             .SingleOrDefaultAsync(cancellationToken);
 
-    public async Task<bool> MarkAssetUnreferencedForCleanupAsync(
+    public async Task<bool> MarkAssetUnreferencedForCleanupAsync (
         string assetKey,
         DateTimeOffset deleteAfter,
         CancellationToken cancellationToken)
     {
-        var affected = await _dbContext.ProductImageUploads
-            .Where(upload => upload.AssetKey == assetKey && upload.Status == ProductImageUploadStatus.Ready)
+        var affected = await FindByCondition(upload => upload.AssetKey == assetKey && upload.Status == ProductImageUploadStatus.Ready)
             .ExecuteUpdateAsync(update => update
                 .SetProperty(upload => upload.Status, ProductImageUploadStatus.Expired)
                 .SetProperty(upload => upload.NextAttemptAt, deleteAfter), cancellationToken);
         return affected == 1;
     }
 
-    public Task<int> CountActiveUploadSlotsAsync(
+    public Task<int> CountActiveUploadSlotsAsync (
         long productId,
         DateTimeOffset now,
         CancellationToken cancellationToken) =>
@@ -119,17 +126,16 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
                 (upload.Status == ProductImageUploadStatus.Ready ||
                  (upload.Status == ProductImageUploadStatus.Pending && upload.ExpiresAt > now)) &&
                 upload.AssetKey != null &&
-                !_dbContext.ProductImages.Any(image => image.AssetKey == upload.AssetKey))
+                !_images.FindAll().Any(image => image.AssetKey == upload.AssetKey))
             .CountAsync(cancellationToken);
 
-    public async Task<bool> TryClaimPendingUploadAsync(
+    public async Task<bool> TryClaimPendingUploadAsync (
         long uploadId,
         DateTimeOffset now,
         DateTimeOffset staleClaimBefore,
         CancellationToken cancellationToken)
     {
-        var affected = await _dbContext.ProductImageUploads
-            .Where(upload =>
+        var affected = await FindByCondition(upload =>
                 upload.Id == uploadId &&
                 upload.Status == ProductImageUploadStatus.Pending &&
                 upload.ExpiresAt > now &&
@@ -139,36 +145,36 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
                 .SetProperty(upload => upload.ProcessingStartedAt, now)
                 .SetProperty(upload => upload.AttemptCount, upload => upload.AttemptCount + 1), cancellationToken);
         if (affected == 1)
-            DetachClaimedUpload(uploadId);
+            //DetachClaimedUpload(uploadId);
+            DetachTrackedEntity(uploadId);
         return affected == 1;
     }
 
-    public async Task<bool> TryClaimOrphanedReadyUploadAsync(
+    public async Task<bool> TryClaimOrphanedReadyUploadAsync (
         long uploadId,
         DateTimeOffset claimedAt,
         DateTimeOffset staleClaimBefore,
         CancellationToken cancellationToken)
     {
-        var affected = await _dbContext.ProductImageUploads
-            .Where(upload => upload.Id == uploadId && upload.Status == ProductImageUploadStatus.Ready &&
+        var affected = await FindByCondition(upload => upload.Id == uploadId && upload.Status == ProductImageUploadStatus.Ready &&
                 upload.AssetKey != null &&
-                !_dbContext.ProductImages.Any(image => image.AssetKey == upload.AssetKey) &&
+                !_images.FindAll().Any(image => image.AssetKey == upload.AssetKey) &&
                 upload.NextAttemptAt != null && upload.NextAttemptAt <= claimedAt &&
                 (upload.ProcessingStartedAt == null || upload.ProcessingStartedAt < staleClaimBefore))
             .ExecuteUpdateAsync(update => update.SetProperty(upload => upload.ProcessingStartedAt, claimedAt), cancellationToken);
         if (affected == 1)
-            DetachClaimedUpload(uploadId);
+            //DetachClaimedUpload(uploadId);
+            DetachTrackedEntity(uploadId);
         return affected == 1;
     }
 
-    public async Task<bool> TryClaimCleanupUploadAsync(
+    public async Task<bool> TryClaimCleanupUploadAsync (
         long uploadId,
         DateTimeOffset claimedAt,
         DateTimeOffset staleClaimBefore,
         CancellationToken cancellationToken)
     {
-        var affected = await _dbContext.ProductImageUploads
-            .Where(upload => upload.Id == uploadId &&
+        var affected = await FindByCondition(upload => upload.Id == uploadId &&
                 ((upload.Status == ProductImageUploadStatus.Ready && upload.StagingDeletedAt == null &&
                   (upload.NextAttemptAt == null || upload.NextAttemptAt <= claimedAt)) ||
                  ((upload.Status == ProductImageUploadStatus.Rejected ||
@@ -184,25 +190,27 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
                 .SetProperty(upload => upload.ProcessingStartedAt, claimedAt)
                 .SetProperty(upload => upload.CleanupAttempts, upload => upload.CleanupAttempts + 1), cancellationToken);
         if (affected == 1)
-            DetachClaimedUpload(uploadId);
+            //DetachClaimedUpload(uploadId);
+            DetachTrackedEntity(uploadId);
         return affected == 1;
     }
 
-    private void DetachClaimedUpload(long uploadId)
-    {
-        // ExecuteUpdate bypasses tracking. The next read must load the persisted lease
-        // (including database timestamp precision), rather than reuse an earlier batch entity.
-        var tracked = _dbContext.ChangeTracker.Entries<ProductImageUploads>()
-            .SingleOrDefault(entry => entry.Entity.Id == uploadId);
-        if (tracked is not null)
-            tracked.State = EntityState.Detached;
-    }
+    // Remove Entity upload have been claimed from the ChangeTracker of EF core and next read must load
+    // new data from database
+    //private void DetachClaimedUpload(long uploadId)
+    //{
+    //    // ExecuteUpdate bypasses tracking. The next read must load the persisted lease
+    //    // (including database timestamp precision), rather than reuse an earlier batch entity.
+    //    var tracked = _dbContext.ChangeTracker.Entries<ProductImageUploads>()
+    //        .SingleOrDefault(entry => entry.Entity.Id == uploadId);
+    //    if (tracked is not null)
+    //        tracked.State = EntityState.Detached;
+    //}
 
-    public async Task<bool> MarkExpiredAsync(long uploadId, DateTimeOffset now, CancellationToken cancellationToken)
+    public async Task<bool> MarkExpiredAsync (long uploadId, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var staleClaimBefore = now - ProductImageUploadDefaults.ProcessingLease;
-        var affected = await _dbContext.ProductImageUploads
-            .Where(upload => upload.Id == uploadId &&
+        var affected = await FindByCondition(upload => upload.Id == uploadId &&
                 upload.Status == ProductImageUploadStatus.Pending &&
                 upload.ExpiresAt <= now &&
                 (upload.ProcessingStartedAt == null || upload.ProcessingStartedAt < staleClaimBefore))
@@ -213,10 +221,9 @@ public sealed class ProductImageUploadRepository : RepositoryBase<ProductImageUp
         return affected == 1;
     }
 
-    public async Task ScheduleCleanupRetryAsync(long uploadId, DateTimeOffset nextAttemptAt, CancellationToken cancellationToken)
+    public async Task ScheduleCleanupRetryAsync (long uploadId, DateTimeOffset nextAttemptAt, CancellationToken cancellationToken)
     {
-        await _dbContext.ProductImageUploads
-            .Where(upload => upload.Id == uploadId)
+        await FindByCondition(upload => upload.Id == uploadId)
             .ExecuteUpdateAsync(update => update
                 .SetProperty(upload => upload.NextAttemptAt, nextAttemptAt)
                 .SetProperty(upload => upload.ProcessingStartedAt, (DateTimeOffset?)null), cancellationToken);

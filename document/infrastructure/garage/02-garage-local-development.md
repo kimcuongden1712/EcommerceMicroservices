@@ -2,7 +2,7 @@
 
 ## English
 
-This setup runs a single Garage node through the existing Docker Compose infrastructure. It is for local development only: replication factor 1 provides no redundancy or disaster recovery.
+This setup runs Garage as an independent Docker Compose stack, separate from the application stack. It is for local development only: replication factor 1 provides no redundancy or disaster recovery.
 
 ## Prerequisites
 
@@ -22,25 +22,25 @@ The [initialization script](../../../src/Infrastructure/Garage/scripts/initializ
 
 `-ExecutionPolicy Bypass` applies only to this PowerShell process. The file remains Git-ignored and excluded from Docker build contexts. Do not use `.env.garage.example` placeholders as credentials or pass Garage RPC/Admin tokens to applications. Initialization does not start Docker or create buckets/keys.
 
-For an already provisioned environment, start Garage from `src` using the existing Product S3 environment file (Compose validates Product.API variables even when selecting Garage):
+Start the standalone Garage stack from `src`; this step requires only Garage's own local secrets:
 
 ```text
-docker compose --env-file .\Infrastructure\Garage\.env.product-api-local -f docker-compose.yml -f docker-compose.override.yml up -d garage
+docker compose -f docker-compose.garage.yml up -d
 ```
 
-For a fresh environment without `.env.product-api-local`, the current combined Compose configuration has a bootstrap dependency on the Product S3 variables. Secret initialization succeeds independently, but the combined startup command above requires that file; do not substitute fake credentials. A standalone Garage bootstrap configuration is a separate infrastructure change.
+This Compose project creates the `ecommerce_garage` network and Garage data volumes without loading Product.API credentials. No placeholder or fake S3 credential is needed to start Garage.
 
 ## Network and storage
 
 | Purpose | Address / location |
 | --- | --- |
 | S3 API from Windows host | `http://localhost:3900` |
-| S3 API from Compose services | `http://garage:3900` |
+| S3 API from application Compose services | `http://garage:3900` on external network `ecommerce_garage` |
 | Garage configuration | `Infrastructure\Garage\garage.toml` mounted read-only at `/etc/garage.toml` |
 | Metadata | Named volume `ecommerce_garage_meta` |
 | Object data | Named volume `ecommerce_garage_data` |
 
-Only the S3 API is published, bound to the local machine. RPC port 3901 and Admin API port 3903 are not published to the host. The Compose network is the existing `ecommerce_microservices` network.
+Only the S3 API is published, bound to the local machine. RPC port 3901 and Admin API port 3903 are not published to the host. Garage uses dedicated network `ecommerce_garage`; Product.API joins it as an external dependency, while the application Compose project does not start Garage.
 
 The Garage image is pinned to `dxflrs/garage:v2.5.0`, the image tag used by the official Garage Docker quick start. Compose overrides the image command with the documented `server --single-node` mode. The Garage CLI status command is used as the container health check.
 
@@ -51,7 +51,7 @@ Buckets and service credentials are provisioned separately from Garage startup. 
 From the `src` directory, start Garage and run the local provisioning and verification scripts:
 
 ```powershell
-docker compose -f docker-compose.yml -f docker-compose.override.yml up -d garage
+docker compose -f docker-compose.garage.yml up -d
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Infrastructure\Garage\scripts\provision-local.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Infrastructure\Garage\scripts\verify-local.ps1
 ```
@@ -112,8 +112,8 @@ For deployment configuration, keep the two boundaries independently keyed per en
 Stopping or recreating the Garage container preserves data in the named volumes. Do not use `docker compose down -v` unless intentionally deleting all Garage metadata and objects.
 
 ```powershell
-docker compose -f docker-compose.yml -f docker-compose.override.yml stop garage
-docker compose -f docker-compose.yml -f docker-compose.override.yml start garage
+docker compose -f docker-compose.garage.yml stop garage
+docker compose -f docker-compose.garage.yml start garage
 ```
 
 The local single-node setup is not a backup. Back up or export any data that must be retained.
@@ -123,10 +123,10 @@ The local single-node setup is not a backup. Back up or export any data that mus
 Do not reset Garage as part of normal setup. The following removes all Garage metadata, buckets, access keys, and stored objects. Confirm that all Garage data can be discarded and that no backup is needed before running it. It deliberately targets only the two Garage volumes and does not use `docker compose down -v`, which could remove unrelated service data.
 
 ```powershell
-docker compose -f docker-compose.yml -f docker-compose.override.yml stop garage
-docker compose -f docker-compose.yml -f docker-compose.override.yml rm -f garage
+docker compose -f docker-compose.garage.yml stop garage
+docker compose -f docker-compose.garage.yml rm -f garage
 docker volume rm ecommerce_garage_meta ecommerce_garage_data
-docker compose -f docker-compose.yml -f docker-compose.override.yml up -d garage
+docker compose -f docker-compose.garage.yml up -d
 ```
 
 ## Troubleshooting
@@ -158,10 +158,16 @@ Script tự xác định đường dẫn theo vị trí của nó, tạo `.env.g
 Với môi trường đã provision, từ `src` chạy:
 
 ```text
-docker compose --env-file .\Infrastructure\Garage\.env.product-api-local -f docker-compose.yml -f docker-compose.override.yml up -d garage
+docker compose -f docker-compose.garage.yml up -d
 ```
 
-Compose hiện kiểm tra cả biến Product.API dù chỉ chọn Garage. Môi trường mới chưa có `.env.product-api-local` có thể chạy script khởi tạo secret độc lập, nhưng chưa chạy được lệnh Compose kết hợp trên. Không điền credential giả; cấu hình bootstrap Garage độc lập là thay đổi hạ tầng riêng.
+Sau khi tạo secret, từ `src` khởi động Garage bằng Compose độc lập:
+
+```text
+docker compose -f docker-compose.garage.yml up -d
+```
+
+Stack chỉ đọc `.env.garage`, tạo network và volume riêng; không cần `.env.product-api-local` hay credential S3 của Product.API. Không điền credential giả.
 
 ### Mạng và dữ liệu
 
@@ -169,10 +175,10 @@ Image trong Compose được pin `dxflrs/garage:v2.5.0`, chạy chế độ sing
 
 ### Provision bucket và chạy Product.API
 
-Từ `src`, chạy Garage rồi `provision-local.ps1` và `verify-local.ps1` như lệnh English phía dưới. Script dùng file `.env.product-api-local` riêng cho Product S3 key; không chuyển Garage Admin/RPC secret sang Product.API. Compose endpoint là `http://garage:3900`, endpoint từ host là `http://localhost:3900`. Khi Product.API chạy trong Compose nhưng browser chạy trên host, cấu hình S3 nội bộ dùng `GARAGE_S3_ENDPOINT=http://garage:3900`, còn URL presigned dùng `GARAGE_S3_PUBLIC_ENDPOINT=http://localhost:3900`.
+Từ `src`, chạy Garage bằng `docker-compose.garage.yml`, sau đó chạy `provision-local.ps1` và `verify-local.ps1` như lệnh English phía trên. Provisioning tạo `.env.product-api-local` riêng; chỉ sau bước này mới chạy Product.API bằng Compose ứng dụng. Hai stack giao tiếp qua network `ecommerce_garage`. Không chuyển Garage Admin/RPC secret sang Product.API. Endpoint Compose là `http://garage:3900`, endpoint host là `http://localhost:3900`.
 
 ### CORS, dừng và xử lý lỗi
 
 Garage bucket CORS và Product.API CORS hiện chưa bật. Không điền origin giả hoặc `*`; chỉ cấu hình sau khi có origin MFE chính xác và phê duyệt riêng. Garage CORS chỉ áp dụng browser upload trực tiếp vào staging; API CORS áp dụng browser gọi API. Dừng/khởi động lại bằng lệnh Compose ở phần English; named volume giữ dữ liệu. Tránh `docker compose down -v`. Khối “Destructive reset” trong phần English sẽ xóa toàn bộ metadata/object Garage, không dùng trong setup thường ngày.
 
-Nếu thiếu `.env.garage`, chạy quy trình first-run; xem log bằng `docker compose ... logs garage`; xác minh bằng `ps garage` và `exec garage /garage status`. Lỗi kết nối thường liên quan Docker/Linux containers hoặc host port 3900 đang bận.
+Nếu thiếu `.env.garage`, chạy quy trình first-run; xem log bằng `docker compose -f docker-compose.garage.yml logs garage`; xác minh bằng `docker compose -f docker-compose.garage.yml ps garage` và `docker compose -f docker-compose.garage.yml exec garage /garage status`. Nếu Product.API báo thiếu network `ecommerce_garage`, khởi động Garage stack trước. Lỗi kết nối còn có thể do Docker/Linux containers hoặc host port 3900 đang bận.

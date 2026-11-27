@@ -4,7 +4,6 @@ using Product.API.Commons.Exceptions;
 using Product.API.Contracts.V1;
 using Product.API.Entities;
 using Product.API.Options;
-using Product.API.Persistence;
 using Product.API.Repositories.Interfaces;
 using Product.API.Services.V1.Interfaces;
 
@@ -12,27 +11,26 @@ namespace Product.API.Services.V1;
 
 public sealed class ProductImageUploadService : IProductImageUploadService
 {
-    private readonly ProductContext _dbContext;
     private readonly IProductRepository _productRepository;
     private readonly IProductImageUploadRepository _uploadRepository;
     private readonly IObjectStorage _objectStorage;
     private readonly ProductMediaOptions _options;
 
-    public ProductImageUploadService(
-        ProductContext dbContext,
+    public ProductImageUploadService (
         IProductRepository productRepository,
         IProductImageUploadRepository uploadRepository,
         IObjectStorage objectStorage,
         Microsoft.Extensions.Options.IOptions<ProductMediaOptions> options)
     {
-        _dbContext = dbContext;
         _productRepository = productRepository;
         _uploadRepository = uploadRepository;
         _objectStorage = objectStorage;
         _options = options.Value;
     }
 
-    public async Task<ProductImageUploadResponse> CreateUploadSessionAsync(
+    #region Upload sessions
+
+    public async Task<ProductImageUploadResponse> CreateUploadSessionAsync (
         long productId,
         CreateProductImageUploadRequest request,
         CancellationToken cancellationToken)
@@ -48,42 +46,40 @@ public sealed class ProductImageUploadService : IProductImageUploadService
                 "INVALID_CONTENT_LENGTH",
                 $"Image size must be between 1 and {_options.MaxFileSizeBytes} bytes.");
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        var product = await _productRepository.LockProductAsync(productId, cancellationToken);
-        if (product is null)
-            throw CatalogAdminException.NotFound("product");
+        await using var transaction = await _productRepository.BeginTransactionAsync(cancellationToken);
+        try {
+            var product = await _productRepository.LockProductAsync(productId, cancellationToken);
+            if (product is null)
+                throw CatalogAdminException.NotFound("product");
 
-        var activeUploadSlots = await _uploadRepository.CountActiveUploadSlotsAsync(
-            productId,
-            DateTimeOffset.UtcNow,
-            cancellationToken);
-        if (activeUploadSlots >= _options.MaxImagesPerProduct)
-            throw new ProductMediaException("IMAGE_LIMIT_EXCEEDED", "Too many active image uploads are already pending for this product.");
+            var activeUploadSlots = await _uploadRepository.CountActiveUploadSlotsAsync(
+                productId,
+                DateTimeOffset.UtcNow,
+                cancellationToken);
+            if (activeUploadSlots >= _options.MaxImagesPerProduct)
+                throw new ProductMediaException("IMAGE_LIMIT_EXCEEDED", "Too many active image uploads are already pending for this product.");
 
-        var now = DateTimeOffset.UtcNow;
-        var upload = new ProductImageUploads
-        {
-            ProductId = productId,
-            StagingKey = $"{productId}/{Guid.NewGuid():N}",
-            AssetKey = Guid.NewGuid().ToString("N"),
-            ExpectedContentType = contentType.ToLowerInvariant(),
-            ExpectedSize = request.ContentLength,
-            Status = ProductImageUploadStatus.Pending,
-            ExpiresAt = now.AddMinutes(_options.PendingUploadExpirationMinutes),
-            CreatedAt = now
-        };
+            var now = DateTimeOffset.UtcNow;
+            var upload = new ProductImageUploads
+            {
+                ProductId = productId,
+                StagingKey = $"{productId}/{Guid.NewGuid():N}",
+                AssetKey = Guid.NewGuid().ToString("N"),
+                ExpectedContentType = contentType.ToLowerInvariant(),
+                ExpectedSize = request.ContentLength,
+                Status = ProductImageUploadStatus.Pending,
+                ExpiresAt = now.AddMinutes(_options.PendingUploadExpirationMinutes),
+                CreatedAt = now
+            };
 
-        try
-        {
-            _uploadRepository.Create(upload);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _uploadRepository.CreateAsync(upload, cancellationToken);
             var presigned = await _objectStorage.CreatePresignedUploadUrlAsync(
                 _options.StagingBucket,
                 upload.StagingKey,
                 TimeSpan.FromMinutes(_options.UploadUrlExpirationMinutes),
                 upload.ExpectedContentType,
                 cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            await _productRepository.EndTransactionAsync(cancellationToken);
 
             return new ProductImageUploadResponse(
                 upload.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -91,14 +87,13 @@ public sealed class ProductImageUploadService : IProductImageUploadService
                 presigned.RequiredHeaders,
                 presigned.ExpiresAt);
         }
-        catch
-        {
-            await transaction.RollbackAsync(CancellationToken.None);
+        catch {
+            await _productRepository.RollbackTransactionAsync(CancellationToken.None);
             throw;
         }
     }
 
-    public async Task<ProductImageUploadStatusResponse?> GetUploadSessionAsync(
+    public async Task<ProductImageUploadStatusResponse?> GetUploadSessionAsync (
         long productId,
         long uploadId,
         CancellationToken cancellationToken)
@@ -118,4 +113,6 @@ public sealed class ProductImageUploadService : IProductImageUploadService
             status,
             upload.ExpiresAt);
     }
+
+    #endregion
 }

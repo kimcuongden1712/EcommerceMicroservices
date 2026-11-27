@@ -1,13 +1,13 @@
 using SkiaSharp;
 
-namespace Product.API.Services.V1;
+namespace Product.API.Commons;
 
 public static class ProductImageInspector
 {
     private const long MaximumDecodedPixels = 20_000_000;
     private const int MaximumDimension = 10_000;
 
-    public static string? TryDecode(Stream stream, out int width, out int height)
+    public static string? TryDecode (Stream stream, out int width, out int height)
     {
         width = 0;
         height = 0;
@@ -39,14 +39,12 @@ public static class ProductImageInspector
         if (bitmap.GetPixels() == IntPtr.Zero)
             return null;
 
-        try
-        {
+        try {
             return codec.GetPixels(bitmap.Info, bitmap.GetPixels()) == SKCodecResult.Success
                 ? contentType
                 : null;
         }
-        catch (ArgumentException)
-        {
+        catch (ArgumentException) {
             return null;
         }
     }

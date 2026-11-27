@@ -84,9 +84,13 @@ public static class ServiceExtensions
         services.ConfigureSwagger();
         services.ConfigureProductDbContext(configuration);
         services.AddInfrastructureServices();
-        services.AddScoped<IPublicCatalogService, PublicCatalogService>();
         services.AddScoped<IAdminCatalogService, AdminCatalogService>();
-        // services.AddJwtAuthentication();
+        services.AddScoped<IProductImageDeliveryService, ProductImageDeliveryService>();
+        services.AddScoped<IProductImageGalleryService, ProductImageGalleryService>();
+        services.AddScoped<IProductImageUploadProcessingService, ProductImageUploadProcessingService>();
+        services.AddScoped<IProductImageUploadService, ProductImageUploadService>();
+        services.AddScoped<IPublicCatalogService, PublicCatalogService>();
+        //services.AddJwtAuthentication();
         services.ConfigureAuthenticationHandler();
         services.ConfigureAuthorization();
         services.AddCatalogAdminAuthorization();
