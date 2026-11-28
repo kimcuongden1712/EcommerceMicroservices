@@ -4,7 +4,7 @@
 
 This document describes the Product.API delivery and acceptance approach. The source-derived image upload, processing, gallery and private delivery behavior is documented in [Product Image Architecture](05-product-images.md). The acceptance table below includes catalog, concurrency, authorization, integration, performance, and media regression scenarios. Run unit tests for domain/validation behavior, database integration tests for constraints and concurrency, and HTTP/contract tests for API and service boundaries. Mark unavailable Garage/browser end-to-end checks as `SKIPPED`, never as passed.
 
-Direct browser upload E2E must wait until the real MFE origin is known and the relevant CORS policy has been explicitly approved. Garage staging CORS and API/gateway CORS are separate controls. Do not use wildcard origins, browser Garage credentials, or log presigned URL query strings. Operational guidance and open product decisions remain proposals where identified below; they are not claims of production readiness.
+Direct browser upload E2E must wait until the real MFE origin is known and the relevant CORS policy has been explicitly approved. The implementation is ready to consume `PRODUCT_API_CORS_ALLOWED_ORIGINS` for Product.API and `PRODUCT_STAGING_CORS_ALLOWED_ORIGINS` through `Infrastructure/Garage/scripts/configure-local-cors.ps1` for Garage. Garage staging CORS and API/gateway CORS are separate controls. Do not use wildcard origins, browser Garage credentials, or log presigned URL query strings. Operational guidance and open product decisions remain proposals where identified below; they are not claims of production readiness.
 
 ## Tiếng Việt
 
@@ -53,12 +53,13 @@ Chỉ chạy các bước CORS sau khi đã ghi nhận origin chính xác cho en
 
 1. Xác nhận Product API đang trả `uploadUrl` có thể truy cập từ browser và `headers.Content-Type` đúng MIME type của file. Không log URL query string.
 2. Từ đúng origin của MFE, gọi `POST /api/v1/admin/products/{productId}/image-uploads` với `contentType` và `contentLength`; kiểm tra `201`, `uploadId`, `uploadUrl`, `headers` và `expiresAt`.
-3. Nếu browser phát sinh preflight, kiểm tra `OPTIONS` tới host Garage trả CORS cho đúng `Origin`, method `PUT` và request header `Content-Type`. Không dùng credentials của Garage trong browser.
-4. Gửi `PUT` trực tiếp tới `uploadUrl`, body là raw bytes của file, và chỉ đặt `Content-Type` theo đúng giá trị trong response. Không gửi JSON, multipart hoặc `Authorization`.
-5. Kiểm tra `PUT` thành công, sau đó chờ worker và gọi `GET /api/v1/admin/products/{productId}/image-uploads/{uploadId}` cho tới `Ready`. Kiểm tra MIME type, kích thước và nội dung ảnh được xác minh ở server.
-6. Gọi `PUT /api/v1/admin/products/{productId}/images` với `If-Match` hiện tại để gắn upload vào gallery; publish product khi đủ invariant.
-7. Gọi public catalog và kiểm tra URL ảnh là `/api/v1/media/{assetKey}`. Từ đúng storefront origin, tải URL đó và xác nhận bytes/MIME type; staging URL và asset chưa được tham chiếu phải không truy cập được.
-8. Lặp lại với sai MIME type, sai kích thước, URL hết hạn, object staging bị xóa trước worker, origin không nằm trong allowlist và thay đổi gallery. Mỗi ca phải ghi rõ HTTP status, upload status và việc staging/object cleanup; test bị bỏ qua phải ghi `SKIPPED`, không tính là `PASS`.
+3. Nếu MFE gọi Product.API khác origin, kiểm tra `OPTIONS` tới API trả đúng `Access-Control-Allow-Origin`, method và request headers; origin ngoài allowlist không được nhận header này.
+4. Nếu browser phát sinh preflight cho upload, kiểm tra `OPTIONS` tới host Garage trả CORS cho đúng `Origin`, method `PUT` và request header `Content-Type`. Không dùng credentials của Garage trong browser.
+5. Gửi `PUT` trực tiếp tới `uploadUrl`, body là raw bytes của file, và chỉ đặt `Content-Type` theo đúng giá trị trong response. Không gửi JSON, multipart hoặc `Authorization`.
+6. Kiểm tra `PUT` thành công, sau đó chờ worker và gọi `GET /api/v1/admin/products/{productId}/image-uploads/{uploadId}` cho tới `Ready`. Kiểm tra MIME type, kích thước và nội dung ảnh được xác minh ở server.
+7. Gọi `PUT /api/v1/admin/products/{productId}/images` với `If-Match` hiện tại để gắn upload vào gallery; publish product khi đủ invariant.
+8. Gọi public catalog và kiểm tra URL ảnh là `/api/v1/media/{assetKey}`. Từ đúng storefront origin, tải URL đó và xác nhận bytes/MIME type; staging URL và asset chưa được tham chiếu phải không truy cập được.
+9. Lặp lại với sai MIME type, sai kích thước, URL hết hạn, object staging bị xóa trước worker, origin không nằm trong allowlist và thay đổi gallery. Mỗi ca phải ghi rõ HTTP status, upload status và việc staging/object cleanup; test bị bỏ qua phải ghi `SKIPPED`, không tính là `PASS`.
 
 ## Vận hành
 

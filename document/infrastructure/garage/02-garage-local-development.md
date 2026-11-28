@@ -9,6 +9,7 @@ This setup runs Garage as an independent Docker Compose stack, separate from the
 - Docker Desktop using Linux containers.
 - Docker Compose v2.
 - Windows PowerShell and `curl.exe` with AWS SigV4 support for `verify-local.ps1`.
+- AWS CLI (`aws.exe`) when applying the optional browser CORS policy.
 
 ## First run
 
@@ -73,9 +74,9 @@ S3 endpoints:
 
 The S3 endpoint used to generate presigned URLs must be reachable by the caller. When Product.API runs in Compose and the caller is the Windows host, keep `GARAGE_S3_ENDPOINT=http://garage:3900` for Product.API storage calls and use `GARAGE_S3_PUBLIC_ENDPOINT=http://localhost:3900` for presigned URLs. The public endpoint is an address placeholder for the local S3 API, not a storefront origin.
 
-### Direct browser upload CORS (deferred until MFE origins are approved)
+### Direct browser upload CORS
 
-The browser uploads the file directly to the private `product-staging` bucket. CORS is therefore a bucket-level setting in Garage, separate from the Product API URL and separate from Garage credentials or bucket permissions. The current provisioning script deliberately does not create, replace, or enable a CORS rule. With no approved storefront origin, CORS remains unset.
+The browser uploads the file directly to the private `product-staging` bucket. CORS is therefore a bucket-level setting in Garage, separate from the Product API URL and separate from Garage credentials or bucket permissions. The repository now includes `scripts/configure-local-cors.ps1`, which applies and reads back the policy through the Garage S3 API. It does not run during normal bucket provisioning unless an operator explicitly invokes it.
 
 Configure an allowlist independently for each environment only after the MFE deployment gives the exact browser origins:
 
@@ -84,9 +85,18 @@ Configure an allowlist independently for each environment only after the MFE dep
 | Local | `<exact local MFE origin>` | `PUT` | `Content-Type` | none required |
 | Production | `<exact production MFE origin>` | `PUT` | `Content-Type` | none required |
 
-Replace the placeholders with concrete origins including scheme and, when applicable, port (for example, `https://host.example` or `http://host.example:port`). Do not use `*`, a path, a trailing URL path, or a guessed localhost port. Keep the local and production rules in separate deployment configuration. Do not apply either rule to Garage until the corresponding origin is approved.
+Replace the placeholders with concrete origins including scheme and, when applicable, port (for example, `https://host.example` or `http://host.example:port`). Do not use `*`, a path, a trailing URL path, or a guessed localhost port. Keep the local and production rules in separate deployment configuration. The scripts reject invalid origins before making a change.
 
-The allowlist can be represented by an environment-specific deployment value such as `PRODUCT_STAGING_CORS_ALLOWED_ORIGINS`, with an empty/unset value meaning “do not call Garage PutBucketCors.” The variable is intentionally not added to the current secret or provisioning output: no origin is known yet, and the existing script must preserve the current Garage configuration. When an origin is approved, the deployment owner should apply a narrow `product-staging` CORS document through the environment’s controlled Garage/S3 configuration process and record the applied origin, method, and header. This does not change bucket permissions or private access.
+For local deployment, set the same approved origin for both boundaries and start Product.API with the Compose environment variable. The Garage script requires AWS CLI because it uses the standard S3 `PutBucketCors`/`GetBucketCors` calls:
+
+```powershell
+$env:PRODUCT_API_CORS_ALLOWED_ORIGINS = '<exact local MFE origin>'
+$env:PRODUCT_STAGING_CORS_ALLOWED_ORIGINS = '<exact local MFE origin>'
+docker compose --env-file .\Infrastructure\Garage\.env.product-api-local -f docker-compose.yml -f docker-compose.override.yml up -d product.api
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Infrastructure\Garage\scripts\configure-local-cors.ps1
+```
+
+The values above are deployment inputs, not origins to copy literally. Use one or more comma-separated exact origins when an environment has more than one approved MFE host. When the CORS script is not invoked, an empty or unset `PRODUCT_STAGING_CORS_ALLOWED_ORIGINS` leaves the existing Garage policy unchanged; an empty or unset `PRODUCT_API_CORS_ALLOWED_ORIGINS` leaves the Product.API browser policy disabled. The Garage script itself requires a non-empty allowlist. These variables must not be put in `.env.product-api-local`, which is reserved for S3 credentials and endpoints.
 
 #### Signed request contract
 
@@ -103,9 +113,25 @@ The browser supplies `Origin` and may send an `OPTIONS` preflight before `PUT`; 
 
 #### Browser calls to Product.API
 
-Garage CORS only covers the direct S3 upload. If the MFE calls Product.API or its gateway from a different origin, that API boundary also needs its own environment-specific allowlist. Product.API currently has no `AddCors`/`UseCors` policy. Keep this unset until the MFE/API routing topology and origins are confirmed; do not assume Garage CORS makes API calls work. For the current browser contract, evaluate `GET`, `POST`, and `PUT`, request headers `Authorization`, `Content-Type`, and `If-Match`, and expose `ETag` if the browser must read the API's version response header. Configure this at the actual browser-facing API or gateway boundary, with exact origins and no wildcard. If the MFE and API are same-origin through a backend-for-frontend, browser CORS may not be needed for that boundary.
+Garage CORS only covers the direct S3 upload. Product.API now registers a named browser policy when `PRODUCT_API_CORS_ALLOWED_ORIGINS` is set. It allows `GET`, `POST`, and `PUT`, request headers `Authorization`, `Content-Type`, `If-Match`, and `X-Correlation-ID`, and exposes `ETag`. It does not allow credentials because the current API contract uses bearer authorization. The middleware runs after routing and before authentication so preflight requests are handled without invoking an endpoint.
 
-For deployment configuration, keep the two boundaries independently keyed per environment, for example `PRODUCT_API_CORS_ALLOWED_ORIGINS` and `PRODUCT_STAGING_CORS_ALLOWED_ORIGINS`; empty/unset values leave the associated policy disabled. These are names for future deployment configuration only, not active values or provisioning-script inputs.
+Configure CORS at the actual browser-facing API or gateway boundary, with exact origins and no wildcard. If the MFE and API are same-origin through a backend-for-frontend, leave the Product.API policy unset. Garage CORS and Product.API CORS are independent: enabling one does not enable the other.
+
+To verify a configured environment, send preflight requests from the same origin that the browser uses and check that the response contains that exact `Access-Control-Allow-Origin` value. An origin outside the allowlist must not receive that header:
+
+```powershell
+curl.exe -i -X OPTIONS http://localhost:6002/api/v1/admin/products `
+  -H "Origin: <exact local MFE origin>" `
+  -H "Access-Control-Request-Method: POST" `
+  -H "Access-Control-Request-Headers: authorization,content-type"
+
+curl.exe -i -X OPTIONS http://localhost:3900/product-staging/cors-probe `
+  -H "Origin: <exact local MFE origin>" `
+  -H "Access-Control-Request-Method: PUT" `
+  -H "Access-Control-Request-Headers: content-type"
+```
+
+The direct upload request remains the signed `PUT` described below; CORS headers are browser protocol headers and are not added to the presigned signature.
 
 ## Persistence and shutdown
 
@@ -147,7 +173,7 @@ docker compose -f docker-compose.garage.yml up -d
 
 ### Điều kiện và khởi động lần đầu
 
-Cần Docker Desktop dùng Linux containers, Docker Compose v2, Windows PowerShell và `curl.exe` hỗ trợ AWS SigV4 cho bước verification. Từ thư mục gốc repository, copy **một lệnh này vào CMD hoặc PowerShell**:
+Cần Docker Desktop dùng Linux containers, Docker Compose v2, Windows PowerShell và `curl.exe` hỗ trợ AWS SigV4 cho bước verification. Cần thêm AWS CLI (`aws.exe`) nếu áp dụng policy CORS tùy chọn. Từ thư mục gốc repository, copy **một lệnh này vào CMD hoặc PowerShell**:
 
 ```text
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\src\Infrastructure\Garage\scripts\initialize-local.ps1"
@@ -179,6 +205,6 @@ Từ `src`, chạy Garage bằng `docker-compose.garage.yml`, sau đó chạy `p
 
 ### CORS, dừng và xử lý lỗi
 
-Garage bucket CORS và Product.API CORS hiện chưa bật. Không điền origin giả hoặc `*`; chỉ cấu hình sau khi có origin MFE chính xác và phê duyệt riêng. Garage CORS chỉ áp dụng browser upload trực tiếp vào staging; API CORS áp dụng browser gọi API. Dừng/khởi động lại bằng lệnh Compose ở phần English; named volume giữ dữ liệu. Tránh `docker compose down -v`. Khối “Destructive reset” trong phần English sẽ xóa toàn bộ metadata/object Garage, không dùng trong setup thường ngày.
+Repository đã có script `Infrastructure\Garage\scripts\configure-local-cors.ps1` để áp dụng và đọc lại CORS cho `product-staging` qua S3. Product.API đọc allowlist từ `PRODUCT_API_CORS_ALLOWED_ORIGINS`; Garage đọc allowlist từ `PRODUCT_STAGING_CORS_ALLOWED_ORIGINS`. Chỉ chạy script sau khi có origin MFE chính xác và đã phê duyệt. Không điền origin giả hoặc `*`; script sẽ từ chối wildcard, path và origin không phải `http(s)`. Hai allowlist độc lập và không chứa credential S3. Dừng/khởi động lại bằng lệnh Compose ở phần English; named volume giữ dữ liệu. Tránh `docker compose down -v`. Khối “Destructive reset” trong phần English sẽ xóa toàn bộ metadata/object Garage, không dùng trong setup thường ngày.
 
 Nếu thiếu `.env.garage`, chạy quy trình first-run; xem log bằng `docker compose -f docker-compose.garage.yml logs garage`; xác minh bằng `docker compose -f docker-compose.garage.yml ps garage` và `docker compose -f docker-compose.garage.yml exec garage /garage status`. Nếu Product.API báo thiếu network `ecommerce_garage`, khởi động Garage stack trước. Lỗi kết nối còn có thể do Docker/Linux containers hoặc host port 3900 đang bận.

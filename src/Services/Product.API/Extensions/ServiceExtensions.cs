@@ -14,6 +14,7 @@ using Product.API.Authorization;
 using Product.API.Persistence;
 using Product.API.Repositories;
 using Product.API.Repositories.Interfaces;
+using Product.API.Options;
 using Product.API.Services.V1;
 using Product.API.Services.V1.Interfaces;
 using Product.API.Validation;
@@ -52,6 +53,7 @@ public static class ServiceExtensions
         services.AddScoped<ProductRequestValidationFilter>();
         services.AddValidatorsFromAssemblyContaining<ProductListQueryRequestValidator>();
         services.AddControllers(options => options.Filters.AddService<ProductRequestValidationFilter>());
+        services.AddProductApiCors(configuration);
         services.Configure<ApiBehaviorOptions>(options =>
         {
             options.InvalidModelStateResponseFactory = context =>
@@ -95,6 +97,42 @@ public static class ServiceExtensions
         services.ConfigureAuthorization();
         services.AddCatalogAdminAuthorization();
         services.ConfigureHealthChecks();
+        return services;
+    }
+
+    public static IServiceCollection AddProductApiCors(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var environmentOrigins = configuration["PRODUCT_API_CORS_ALLOWED_ORIGINS"];
+        var configuredOrigins = environmentOrigins is not null
+            ? ProductApiCorsOptions.ParseAllowedOrigins([environmentOrigins])
+            : ProductApiCorsOptions.ParseAllowedOrigins(
+                configuration
+                    .GetSection(ProductApiCorsOptions.SectionName)
+                    .GetSection(nameof(ProductApiCorsOptions.AllowedOrigins))
+                    .Get<string[]>());
+
+        services.AddOptions<ProductApiCorsOptions>()
+            .Configure(options => options.AllowedOrigins = configuredOrigins)
+            .Validate(options => options.IsValid(), "Product API CORS configuration is invalid.")
+            .ValidateOnStart();
+
+        services.AddCors(options => options.AddPolicy(ProductApiCorsOptions.PolicyName, policy =>
+        {
+            if (configuredOrigins.Length == 0)
+                return;
+
+            policy
+                .WithOrigins(configuredOrigins)
+                .WithMethods("GET", "POST", "PUT")
+                .WithHeaders("Authorization", "Content-Type", "If-Match", "X-Correlation-ID")
+                .WithExposedHeaders("ETag");
+        }));
+
         return services;
     }
 

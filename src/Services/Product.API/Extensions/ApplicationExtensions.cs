@@ -2,6 +2,7 @@ using HealthChecks.UI.Client;
 using Infrastructure.Exceptions;
 using Infrastructure.Middlewares;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Product.API.Options;
 
 namespace Product.API.Extensions;
 
@@ -46,6 +47,7 @@ public static class ApplicationExtensions
                 context.RequestAborted);
         });
         app.UseRouting();
+        app.UseCors(ProductApiCorsOptions.PolicyName);
         app.UseAuthentication();
         // app.UseHttpsRedirection(); //for production only
         app.UseAuthorization();

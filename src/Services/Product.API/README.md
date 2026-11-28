@@ -18,6 +18,17 @@ Health endpoints:
 
 Compose overrides the database connection string with the `tedu_product_db` container name. `JwtSettings` and `ApiConfiguration` also control authentication and Swagger OAuth settings. Compose starts the identity server as `identity.api`. The Compose HTTP port is **6002**; the local launch profile uses **5002**.
 
+## Browser CORS
+
+Product.API has an environment-specific browser CORS policy. Set `PRODUCT_API_CORS_ALLOWED_ORIGINS` to one or more exact comma-separated MFE origins when the browser calls Product.API from a different origin:
+
+```powershell
+$env:PRODUCT_API_CORS_ALLOWED_ORIGINS = '<exact MFE origin>'
+dotnet run --project src/Services/Product.API/Product.API.csproj --launch-profile Product.API
+```
+
+The policy allows `GET`, `POST`, and `PUT`, request headers `Authorization`, `Content-Type`, `If-Match`, and `X-Correlation-ID`, and exposes `ETag`. It does not enable credentials. The default `ProductApiCors:AllowedOrigins` list is empty, so same-origin/BFF deployments need no browser CORS configuration. Origins must be `http` or `https` authorities without a path or wildcard; invalid values fail startup. Garage bucket CORS is configured separately by `src/Infrastructure/Garage/scripts/configure-local-cors.ps1` for direct uploads to `product-staging`.
+
 ## Create `appsettings.Development.json`
 
 Create `src/Services/Product.API/appsettings.Development.json` for a local `dotnet run`:
